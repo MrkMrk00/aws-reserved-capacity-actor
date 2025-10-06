@@ -1,3 +1,4 @@
+import json
 import pprint
 
 import boto3
@@ -9,7 +10,7 @@ ORG_REGION = 'us-east-1'
 
 
 class CustomAwsClient:
-    RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
+    RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
 
     def __init__(
             self,
@@ -26,6 +27,8 @@ class CustomAwsClient:
             body: dict,
             method: str = 'POST',
     ) -> requests.Response:
+        credentials = self._session.get_credentials().get_frozen_credentials()
+
         url = f'https://{service}.{self._region}.amazonaws.com/'
         headers = {
             'Host': f'{service}.{self._region}.amazonaws.com',
@@ -33,23 +36,24 @@ class CustomAwsClient:
             'X-Amz-Target': rpc_target,
             'X-Amz-User-Agent': 'aws-sdk-js/1.0.0 os/macOS/10.15 lang/js md/browser/Firefox_144.0 api/dynamodbreservedcapacity/1.0.0',
         }
+        body = json.dumps(body).encode()
 
         request = AWSRequest(method=method, url=url,
                              data=body, headers=headers)
-        creds = self._session.get_credentials().get_frozen_credentials()
 
-        SigV4Auth(creds, service_name=service,
+        SigV4Auth(credentials, service_name=service,
                   region_name=self._region).add_auth(request)
 
         prepared_headers = dict(request.headers.items())
-        pprint.pprint(prepared_headers)
 
-        return requests.request(
+        response = requests.request(
             method, url, headers=prepared_headers, data=body)
+
+        return response
 
     def get_dynamodb_reserved_capacity(self):
         pprint.pprint(self._make_request(
-            'dynamodb', self.RESERVED_CAPACITY, {}))
+            'dynamodb', self.RPC_RESERVED_CAPACITY, {}).json())
 
 
 def main() -> int:
