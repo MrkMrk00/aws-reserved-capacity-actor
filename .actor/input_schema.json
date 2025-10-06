@@ -3,6 +3,13 @@
     "type": "object",
     "schemaVersion": 1,
     "properties": {
+        "days": {
+            "title": "Notify time delta",
+            "type": "integer",
+            "description": "How many days in advance to notify.",
+            "editor": "number",
+            "prefill": 3
+        }
     },
-    "required": []
+    "required": ["days"]
 }

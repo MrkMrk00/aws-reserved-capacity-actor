@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import json
 
 import boto3
@@ -17,6 +18,22 @@ class ReservedCapacity:
     StartDate: str
     UsagePrice: float
     UsageType: str
+
+    def is_active(self) -> bool:
+        return self.ReservedCapacityState == 'active'
+
+    def start_date(self) -> datetime.datetime:
+        unix_timestamp = int(self.StartDate) / 1000
+
+        return datetime.datetime.fromtimestamp(unix_timestamp)
+
+    def valid_until(self) -> datetime.datetime:
+        valid_delta = datetime.timedelta(seconds=int(self.DurationSeconds))
+
+        return self.start_date() + valid_delta
+
+    def upfront_cost(self):
+        return int(self.FixedPrice) * self.InstanceCount
 
     @classmethod
     def from_dict(cls, dct: dict):
@@ -74,8 +91,11 @@ class CustomAwsClient:
 
         start_key = 0
         while True:
-            response = self._make_request('dynamodb', self.RPC_RESERVED_CAPACITY, {
-                'ExclusiveStartKey': str(start_key)})
+            response = self._make_request(
+                'dynamodb',
+                self.RPC_RESERVED_CAPACITY,
+                {'ExclusiveStartKey': str(start_key)},
+            )
             assert response.status_code == 200
 
             body = response.json()
