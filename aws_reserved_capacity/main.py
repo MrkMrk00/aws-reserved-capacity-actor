@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import pprint
 
@@ -7,6 +8,18 @@ from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 
 ORG_REGION = 'us-east-1'
+
+
+@dataclasses.dataclass
+class ReservedCapacity:
+    DurationSeconds: int
+    FixedPrice: float
+    InstanceCount: int
+    ReservedCapacityId: str
+    ReservedCapacityState: str
+    StartDate: str
+    UsagePrice: float
+    UsageType: str
 
 
 class CustomAwsClient:
@@ -51,14 +64,34 @@ class CustomAwsClient:
 
         return response
 
-    def get_dynamodb_reserved_capacity(self):
-        pprint.pprint(self._make_request(
-            'dynamodb', self.RPC_RESERVED_CAPACITY, {}).json())
+    def dynamodb_reserved_capacities(self) -> list[ReservedCapacity]:
+        objects = []
+
+        start_key = 0
+        while True:
+            response = self._make_request('dynamodb', self.RPC_RESERVED_CAPACITY, {
+                'ExclusiveStartKey': str(start_key)})
+            assert response.status_code == 200
+
+            body = response.json()
+            objects.extend(ReservedCapacity(**json_capacity)
+                           for json_capacity in body.get('ReservedCapacities'))
+
+            next_pager = int(body.get('LastEvaluatedKey'))
+
+            # no more items to fetch
+            if next_pager - start_key > len(body.get('ReservedCapacities')):
+                break
+            else:
+                start_key = next_pager
+
+        return objects
 
 
 def main() -> int:
     client = CustomAwsClient(boto3.Session(), ORG_REGION)
-    client.get_dynamodb_reserved_capacity()
+    result = client.dynamodb_reserved_capacities()
+    pprint.pprint(result)
 
     return 0
 
