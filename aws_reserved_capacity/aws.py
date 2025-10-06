@@ -18,6 +18,14 @@ class ReservedCapacity:
     UsagePrice: float
     UsageType: str
 
+    @classmethod
+    def from_dict(cls, dct: dict):
+        # unsure no extra fields in dct
+        fields = {field.name for field in dataclasses.fields(cls)}
+        data = {k: v for k, v in dct.items() if k in fields}
+
+        return cls(**data)
+
 
 class CustomAwsClient:
     RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
@@ -71,7 +79,7 @@ class CustomAwsClient:
             assert response.status_code == 200
 
             body = response.json()
-            objects.extend(ReservedCapacity(**json_capacity)
+            objects.extend(ReservedCapacity.from_dict(json_capacity)
                            for json_capacity in body.get('ReservedCapacities'))
 
             next_pager = int(body.get('LastEvaluatedKey'))

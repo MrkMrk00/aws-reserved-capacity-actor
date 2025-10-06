@@ -4,7 +4,7 @@ import pprint
 import boto3
 from apify import Actor
 
-from .aws import CustomAwsClient
+from aws import CustomAwsClient
 
 ORG_REGION = 'us-east-1'
 
@@ -19,11 +19,11 @@ ORG_REGION = 'us-east-1'
 
 async def main() -> int:
     client = CustomAwsClient(boto3.Session(), ORG_REGION)
-    async with Actor:
-        pass
+    # async with Actor:
+    #     pass
 
-    # result = client.dynamodb_reserved_capacities()
-    # pprint.pprint(result)
+    result = client.dynamodb_reserved_capacities()
+    pprint.pprint(result)
 
     return 0
 
