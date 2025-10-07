@@ -1,82 +1,38 @@
-## Scrape single-page in Python template
+# AWS Reserved Capacity & Savings Plan Notifier
 
-<!-- This is an Apify template readme -->
+This [Apify Actor](https://apify.com/actors) retrieves AWS DynamoDB reserved capacities and Compute Savings Plans using the AWS SDK, then posts a summary message to a Slack channel via a bot.
 
-A template for [web scraping](https://apify.com/web-scraping) data from a single web page in Python. The URL of the web page is passed in via input, which is defined by the [input schema](https://docs.apify.com/platform/actors/development/input-schema). The template uses the [HTTPX](https://www.python-httpx.org) to get the HTML of the page and the [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/bs4/doc/) to parse the data from it. The data are then stored in a [dataset](https://docs.apify.com/sdk/python/docs/concepts/storages#working-with-datasets) where you can easily access them.
+## Features
+- Fetches:
+    - DynamoDB Reserved Capacity details
+    - Compute Savings Plans (with expiration and commitment details)
+- Detects and highlights upcoming expirations
+- Calculates remaining days
+- Sends a formatted notification to a Slack channel using a bot
+- Fully configurable via Actor input
 
-The scraped data in this template are page headings but you can easily edit the code to scrape whatever you want from the page.
+## Input Configuration
 
-## Included features
+The Actor expects the following JSON input:
 
-- **[Apify SDK](https://docs.apify.com/sdk/python/)** for Python - a toolkit for building Apify [Actors](https://apify.com/actors) and scrapers in Python
-- **[Input schema](https://docs.apify.com/platform/actors/development/input-schema)** - define and easily validate a schema for your Actor's input
-- **[Request queue](https://docs.apify.com/sdk/python/docs/concepts/storages#working-with-request-queues)** - queues into which you can put the URLs you want to scrape
-- **[Dataset](https://docs.apify.com/sdk/python/docs/concepts/storages#working-with-datasets)** - store structured data where each object stored has the same attributes
-- **[HTTPX](https://www.python-httpx.org)** - library for making asynchronous HTTP requests in Python
-- **[Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/bs4/doc/)** - library for pulling data out of HTML and XML files
-
-## How it works
-
-1. `Actor.get_input()` gets the input where the page URL is defined
-2. `httpx.AsyncClient().get(url)` fetches the page
-3. `BeautifulSoup(response.content, 'lxml')` loads the page data and enables parsing the headings
-4. This parses the headings from the page and here you can edit the code to parse whatever you need from the page
-    ```python
-    for heading in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
-    ```
-5. `Actor.push_data(headings)` stores the headings in the dataset
-
-## Resources
-
-- [BeautifulSoup Scraper](https://apify.com/apify/beautifulsoup-scraper)
-- [Python tutorials in Academy](https://docs.apify.com/academy/python)
-- [Web scraping with Beautiful Soup and Requests](https://blog.apify.com/web-scraping-with-beautiful-soup/)
-- [Beautiful Soup vs. Scrapy for web scraping](https://blog.apify.com/beautiful-soup-vs-scrapy-web-scraping/)
-- [Integration with Make, GitHub, Zapier, Google Drive, and other apps](https://apify.com/integrations)
-- [Video guide on getting scraped data using Apify API](https://www.youtube.com/watch?v=ViYYDHSBAKM)
-- A short guide on how to build web scrapers using code templates:
-
-[web scraper template](https://www.youtube.com/watch?v=u-i-Korzf8w)
-
-
-## Getting started
-
-For complete information [see this article](https://docs.apify.com/platform/actors/development#build-actor-locally). To run the Actor use the following command:
-
-```bash
-apify run
+```json
+{
+    "days_urgent": 3,
+    "days_notify": 14,
+    "aws_access_key_id": "ASDIOUHB53OJLK",
+    "aws_secret_access_key": "********************************",
+    "slack_bot_key": "********************************",
+    "slack_channel_id": "ASDKJGKJ24123UZH"
+}
 ```
 
-## Deploy to Apify
+| Field | Type | Required | Description |
+|--------|------|-----------|-------------|
+| `aws_access_key_id` | string | yes | AWS Access Key ID with permissions to query Savings Plans and DynamoDB Reserved Capacity. |
+| `aws_secret_access_key` | string | yes | AWS Secret Access Key. |
+| `slack_bot_key` | string | yes | Slack Bot OAuth token (used to send messages via the Slack API). |
+| `slack_channel_id` | string | yes | ID of the Slack channel where notifications should be posted. |
+| `days_notify` | number | yes | Number of days before expiration to send a reminder (default: `14`). |
+| `days_urgent` | number | yes | Number of days before expiration to mark an item as urgent and spam notifications every day (default: `3`). |
 
-### Connect Git repository to Apify
 
-If you've created a Git repository for the project, you can easily connect to Apify:
-
-1. Go to [Actor creation page](https://console.apify.com/actors/new)
-2. Click on **Link Git Repository** button
-
-### Push project on your local machine to Apify
-
-You can also deploy the project on your local machine to Apify without the need for the Git repository.
-
-1. Log in to Apify. You will need to provide your [Apify API Token](https://console.apify.com/account/integrations) to complete this action.
-
-    ```bash
-    apify login
-    ```
-
-2. Deploy your Actor. This command will deploy and build the Actor on the Apify Platform. You can find your newly created Actor under [Actors -> My Actors](https://console.apify.com/actors?tab=my).
-
-    ```bash
-    apify push
-    ```
-
-## Documentation reference
-
-To learn more about Apify and Actors, take a look at the following resources:
-
-- [Apify SDK for JavaScript documentation](https://docs.apify.com/sdk/js)
-- [Apify SDK for Python documentation](https://docs.apify.com/sdk/python)
-- [Apify Platform documentation](https://docs.apify.com/platform)
-- [Join our developer community on Discord](https://discord.com/invite/jyEM2PRvMU)
