@@ -5,6 +5,7 @@ import pprint
 from typing import Generator
 
 import boto3
+# import slack_sdk
 from apify import Actor
 
 from .aws import ReservedCapacity, list_dynamodb_reserved_capacities
@@ -43,8 +44,11 @@ def create_aws_session(actor_input: dict) -> boto3.Session:
     )
 
 
-def send_slack_notification():
-    pass
+# def send_slack_notification(bot_token: str) -> None:
+#     client = slack_sdk.WebClient(token=bot_token)
+#
+#     client.chat_postMessage(
+#         channel=)
 
 
 ORG_ACCOUNT_REGION = 'us-east-1'
@@ -53,6 +57,11 @@ ORG_ACCOUNT_REGION = 'us-east-1'
 async def main() -> None:
     async with Actor:
         input = await Actor.get_input()
+
+        # slack_bot_token = input.get('slack_bot_token', os.environ.get('SLACK_BOT_TOKEN'))
+        # assert slack_bot_token is not None, \
+        #     'Slack bot token was not provided'
+
         session = create_aws_session(input)
         reserved_capacities: list[ReservedCapacity]
 

@@ -9,7 +9,28 @@
             "description": "How many days in advance to notify.",
             "editor": "number",
             "prefill": 3
+        },
+        "aws_access_key_id": {
+            "title": "AWS access key ID",
+            "type": "string",
+            "description": "",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "aws_secret_access_key": {
+            "title": "AWS secret key",
+            "type": "string",
+            "description": "",
+            "editor": "textfield",
+            "isSecret": true
+        },
+        "slack_bot_key": {
+            "title": "Slack bot key",
+            "type": "string",
+            "description": "",
+            "editor": "textfield",
+            "isSecret": true
         }
     },
-    "required": ["days"]
+    "required": ["days", "aws_access_key_id", "aws_secret_access_key", "slack_bot_key"]
 }
