@@ -1,11 +1,15 @@
 import dataclasses
 import datetime
 import json
+import urllib
+from typing import TYPE_CHECKING
 
 import boto3
-import requests
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
+
+if TYPE_CHECKING:
+    import http
 
 
 @dataclasses.dataclass
@@ -48,14 +52,13 @@ _RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
 
 
 def _make_request(
-    session: boto3.Session,
-    region: str,
-    service: str,
-    rpc_target: str,
-    api_identification: tuple[str, str],
-    method: str = 'POST',
-    body: dict = {},
-):
+        session: boto3.Session,
+        region: str,
+        service: str,
+        rpc_target: str,
+        api_identification: tuple[str, str],
+        method: str = 'POST',
+        body: dict = {}) -> dict | None:
     credentials = session.get_credentials().get_frozen_credentials()
 
     url = f'https://{service}.{region}.amazonaws.com/'
@@ -75,16 +78,25 @@ def _make_request(
 
     prepared_headers = dict(request.headers.items())
 
-    response = requests.request(
-        method, url, headers=prepared_headers, data=body)
+    request = urllib.request.Request(
+        method=method,
+        url=url,
+        data=body,
+        headers=prepared_headers,
+    )
 
-    return response
+    with urllib.request.urlopen(request) as res:
+        res: http.client.HTTPResponse
+        assert res.status >= 200 and res.status < 300, res.read().decode()
+
+        return json.loads(res.read().decode())
+
+    return None
 
 
 def list_dynamodb_reserved_capacities(
-    session: boto3.Session,
-    region: str,
-) -> list[ReservedCapacity]:
+        session: boto3.Session,
+        region: str) -> list[ReservedCapacity]:
     objects = []
 
     start_key = 0
@@ -97,16 +109,14 @@ def list_dynamodb_reserved_capacities(
             ('dynamodbreservedcapacity', '1.0.0'),
             body={'ExclusiveStartKey': str(start_key)},
         )
-        assert response.status_code == 200
 
-        body = response.json()
         objects.extend(ReservedCapacity.from_dict(json_capacity)
-                       for json_capacity in body.get('ReservedCapacities'))
+                       for json_capacity in response.get('ReservedCapacities'))
 
-        next_pager = int(body.get('LastEvaluatedKey'))
+        next_pager = int(response.get('LastEvaluatedKey'))
 
         # no more items to fetch
-        if next_pager - start_key > len(body.get('ReservedCapacities')):
+        if next_pager - start_key > len(response.get('ReservedCapacities')):
             break
         else:
             start_key = next_pager

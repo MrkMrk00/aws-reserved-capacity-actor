@@ -43,6 +43,10 @@ def create_aws_session(actor_input: dict) -> boto3.Session:
     )
 
 
+def send_slack_notification():
+    pass
+
+
 ORG_ACCOUNT_REGION = 'us-east-1'
 
 
@@ -50,15 +54,23 @@ async def main() -> None:
     async with Actor:
         input = await Actor.get_input()
         session = create_aws_session(input)
+        reserved_capacities: list[ReservedCapacity]
 
-        reserved_capacities = list_dynamodb_reserved_capacities(
-            session, ORG_ACCOUNT_REGION)
+        try:
+            reserved_capacities = list_dynamodb_reserved_capacities(
+                session, ORG_ACCOUNT_REGION)
+        except Exception:
+            Actor.log.exception('failed to fetch DynamoDB reserved capacities')
+            return
 
         expiring_soon = list(get_expiring_soon(
             reserved_capacities, datetime.timedelta(days=input.get('days'))))
 
         Actor.log.info('%d DynamoDB reserved capacities expiring soon',
                        len(expiring_soon))
+
+        if len(expiring_soon) == 0:
+            return
 
         pprint.pprint(list(expiring_soon))
 
