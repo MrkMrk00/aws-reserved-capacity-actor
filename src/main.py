@@ -50,13 +50,31 @@ def create_aws_session(actor_input: dict) -> boto3.Session:
     )
 
 
+def _format_resource_row(resource: Expiriable, bolden: bool = False) -> str:
+    now = datetime.datetime.now().astimezone()
+    expiring_in = (resource.valid_until() - now).days
+    bought_date = resource.start_date().strftime('%Y-%m-%d')
+
+    text = resource.describe()
+    text += ' (expiring in '
+
+    if bolden:
+        text += f'**{expiring_in}**'
+    else:
+        text += str(expiring_in)
+
+    text += f' days - bought: {bought_date}) '
+    text += f'([link]({resource.get_link()}))'
+
+    return text
+
+
 async def handle_notify_urgent(client: slack_sdk.WebClient,
                                channel_name: str,
                                store: KeyValueStore,
                                delta: datetime.timedelta,
                                saving_plans: list[Expiriable]):
     urgent_plans = list(get_expiring_soon(saving_plans, delta))
-
     if len(urgent_plans) <= 0:
         Actor.log.info('no urgent notifications to be sent')
         return
@@ -66,14 +84,10 @@ Hey!
 These AWS savings plans will be expiring very soon! You might want to renew them.
 
 """
-    now = datetime.datetime.now().astimezone()
-
     for plan in urgent_plans:
-        days_remaining = (plan.valid_until() - now).days
+        text += f'- {_format_resource_row(plan, bolden=True)}\n'
 
-        text += f'- {plan.describe()} (expiring in **{days_remaining}** days) [(link)]({plan.get_link()})\n'
-
-    Actor.log.info(f'sending urgent notification\n{text=}')
+    Actor.log.info('sending urgent notification')
 
     return await asyncio.to_thread(client.chat_postMessage,
                                    channel=channel_name,
@@ -100,14 +114,10 @@ Hi.
 There seem to be some savings plans in AWS that will be expiring soon. Just letting you know ;)
 
 """
-    now = datetime.datetime.now().astimezone()
-
     for plan in non_urgent_plans:
-        days_remaining = (plan.valid_until() - now).days
+        text += f'- {_format_resource_row(plan)}\n'
 
-        text += f'- {plan.describe()} (expiring in {days_remaining} days) [(link)]({plan.get_link()})\n'
-
-    Actor.log.info(f'sending non_urgent notification\n{text=}')
+    Actor.log.info('sending non_urgent notification')
 
     result = await asyncio.to_thread(client.chat_postMessage,
                                      channel=channel_name,

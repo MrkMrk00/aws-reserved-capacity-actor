@@ -23,6 +23,9 @@ class Expiriable(abc.ABC):
     def is_active(self) -> bool: ...
 
     @abc.abstractmethod
+    def start_date(self) -> datetime.datetime: ...
+
+    @abc.abstractmethod
     def valid_until(self) -> datetime.datetime: ...
 
     @abc.abstractmethod
@@ -75,6 +78,7 @@ class ReservedCapacity(FromDictMixin, Expiriable):
     def describe(self) -> str:
         return f'DynamoDB Reserved Capacity for ${self.upfront_cost():.2f}'
 
+    @override
     def start_date(self) -> datetime.datetime:
         unix_timestamp = int(self.StartDate) / 1000
 
@@ -162,7 +166,8 @@ async def list_dynamodb_reserved_capacities(
 class SavingsPlan(FromDictMixin, Expiriable):
     commitment: str
     description: str
-    # end has format '2026-11-06T12:59:59.000Z'
+    # start/end has format '2026-11-06T12:59:59.000Z'
+    start: str
     end: str
     offeringId: str
     savingsPlanId: str
@@ -188,6 +193,10 @@ class SavingsPlan(FromDictMixin, Expiriable):
     @override
     def describe(self) -> str:
         return f'{self.description} for ${float(self.commitment):.2f}'
+
+    @override
+    def start_date(self) -> datetime.datetime:
+        return datetime.datetime.fromisoformat(self.start)
 
 
 async def list_savings_plans(session: boto3.Session, region: str) -> list[SavingsPlan]:
