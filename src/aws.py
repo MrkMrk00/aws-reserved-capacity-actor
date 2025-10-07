@@ -1,8 +1,9 @@
+import asyncio
 import dataclasses
 import datetime
 import json
 import urllib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import boto3
 from botocore.auth import SigV4Auth
@@ -12,8 +13,18 @@ if TYPE_CHECKING:
     import http
 
 
+class FromDictMixin:
+    @classmethod
+    def from_dict(cls, dct: dict) -> Self:
+        # unsure no extra fields in dct
+        fields = {field.name for field in dataclasses.fields(cls)}
+        data = {k: v for k, v in dct.items() if k in fields}
+
+        return cls(**data)
+
+
 @dataclasses.dataclass
-class ReservedCapacity:
+class ReservedCapacity(FromDictMixin):
     DurationSeconds: int
     FixedPrice: float
     InstanceCount: int
@@ -39,19 +50,11 @@ class ReservedCapacity:
     def upfront_cost(self):
         return int(self.FixedPrice) * self.InstanceCount
 
-    @classmethod
-    def from_dict(cls, dct: dict):
-        # unsure no extra fields in dct
-        fields = {field.name for field in dataclasses.fields(cls)}
-        data = {k: v for k, v in dct.items() if k in fields}
-
-        return cls(**data)
-
 
 _RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
 
 
-def _make_request(
+async def _make_custom_request(
         session: boto3.Session,
         region: str,
         service: str,
@@ -85,23 +88,24 @@ def _make_request(
         headers=prepared_headers,
     )
 
-    with urllib.request.urlopen(request) as res:
-        res: http.client.HTTPResponse
-        assert res.status >= 200 and res.status < 300, res.read().decode()
+    def _do_fetch(req: urllib.request.Request):
+        with urllib.request.urlopen(req) as res:
+            res: http.client.HTTPResponse
+            assert res.status >= 200 and res.status < 300, res.read().decode()
 
-        return json.loads(res.read().decode())
+            return json.loads(res.read().decode())
 
-    return None
+    return await asyncio.to_thread(_do_fetch, request)
 
 
-def list_dynamodb_reserved_capacities(
+async def list_dynamodb_reserved_capacities(
         session: boto3.Session,
         region: str) -> list[ReservedCapacity]:
     objects = []
 
     start_key = 0
     while True:
-        response = _make_request(
+        response = await _make_custom_request(
             session,
             region,
             'dynamodb',
@@ -120,5 +124,44 @@ def list_dynamodb_reserved_capacities(
             break
         else:
             start_key = next_pager
+
+    return objects
+
+
+@dataclasses.dataclass
+class SavingsPlan(FromDictMixin):
+    commitment: str
+    currency: str
+    description: str
+    end: str
+    offeringId: str
+    savingsPlanId: str
+    savingsPlanType: str
+    state: str
+
+
+async def list_savings_plans(session: boto3.Session, region: str) -> list[SavingsPlan]:
+    max_results = 1000
+    objects: list[SavingsPlan] = []
+    pager = None
+    client = session.client('savingsplans', region_name=region)
+
+    while True:
+        params = {'maxResults': max_results}
+        if pager is not None:
+            params['nextToken'] = pager
+
+        response = await asyncio.to_thread(client.describe_savings_plans, **params)
+
+        savings_plans = response['savingsPlans']
+        if len(savings_plans) == 0:
+            break
+
+        objects.extend(SavingsPlan.from_dict(sp) for sp in savings_plans)
+
+        if len(savings_plans) >= max_results and 'nextToken' in response:
+            pager = response['nextToken']
+        else:
+            break
 
     return objects

@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 import datetime
 import os
@@ -8,7 +9,8 @@ import boto3
 # import slack_sdk
 from apify import Actor
 
-from .aws import ReservedCapacity, list_dynamodb_reserved_capacities
+from .aws import (ReservedCapacity, SavingsPlan,
+                  list_dynamodb_reserved_capacities, list_savings_plans)
 
 
 def get_expiring_soon(
@@ -63,14 +65,19 @@ async def main() -> None:
         #     'Slack bot token was not provided'
 
         session = create_aws_session(input)
-        reserved_capacities: list[ReservedCapacity]
 
-        try:
-            reserved_capacities = list_dynamodb_reserved_capacities(
-                session, ORG_ACCOUNT_REGION)
-        except Exception:
-            Actor.log.exception('failed to fetch DynamoDB reserved capacities')
-            return
+        reserved_capacities: list[ReservedCapacity]
+        savings_plans: list[SavingsPlan]
+
+        reserved_capacities, savings_plans = await asyncio.gather(
+            list_dynamodb_reserved_capacities(session, ORG_ACCOUNT_REGION),
+            list_savings_plans(session, ORG_ACCOUNT_REGION),
+        )
+
+        pprint.pprint({
+            'reserved_capacities': reserved_capacities,
+            'savings_plans': savings_plans,
+        })
 
         expiring_soon = list(get_expiring_soon(
             reserved_capacities, datetime.timedelta(days=input.get('days'))))
