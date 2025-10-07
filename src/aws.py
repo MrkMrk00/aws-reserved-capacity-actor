@@ -1,9 +1,10 @@
+import abc
 import asyncio
 import dataclasses
 import datetime
 import json
 import urllib
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Self, override
 
 import boto3
 from botocore.auth import SigV4Auth
@@ -11,6 +12,17 @@ from botocore.awsrequest import AWSRequest
 
 if TYPE_CHECKING:
     import http
+
+
+class Expiriable(abc.ABC):
+    @abc.abstractmethod
+    def is_active(self) -> bool: ...
+
+    @abc.abstractmethod
+    def valid_until(self) -> datetime.datetime: ...
+
+    @abc.abstractmethod
+    def describe(self) -> str: ...
 
 
 class FromDictMixin:
@@ -23,8 +35,11 @@ class FromDictMixin:
         return cls(**data)
 
 
+_US_EAST_TZ = datetime.timezone(datetime.timedelta(hours=-4))
+
+
 @dataclasses.dataclass
-class ReservedCapacity(FromDictMixin):
+class ReservedCapacity(FromDictMixin, Expiriable):
     DurationSeconds: int
     FixedPrice: float
     InstanceCount: int
@@ -34,18 +49,24 @@ class ReservedCapacity(FromDictMixin):
     UsagePrice: float
     UsageType: str
 
+    @override
     def is_active(self) -> bool:
         return self.ReservedCapacityState == 'active'
 
-    def start_date(self) -> datetime.datetime:
-        unix_timestamp = int(self.StartDate) / 1000
-
-        return datetime.datetime.fromtimestamp(unix_timestamp)
-
+    @override
     def valid_until(self) -> datetime.datetime:
         valid_delta = datetime.timedelta(seconds=int(self.DurationSeconds))
 
         return self.start_date() + valid_delta
+
+    @override
+    def describe(self) -> str:
+        return self.__repr__()
+
+    def start_date(self) -> datetime.datetime:
+        unix_timestamp = int(self.StartDate) / 1000
+
+        return datetime.datetime.fromtimestamp(unix_timestamp, datetime.timezone.utc)
 
     def upfront_cost(self):
         return int(self.FixedPrice) * self.InstanceCount
@@ -126,15 +147,28 @@ async def list_dynamodb_reserved_capacities(
 
 
 @dataclasses.dataclass
-class SavingsPlan(FromDictMixin):
+class SavingsPlan(FromDictMixin, Expiriable):
     commitment: str
     currency: str
     description: str
+    # end has format '2026-11-06T12:59:59.000Z'
     end: str
     offeringId: str
     savingsPlanId: str
     savingsPlanType: str
     state: str
+
+    @override
+    def is_active(self) -> bool:
+        return self.state == 'active'
+
+    @override
+    def valid_until(self) -> datetime.datetime:
+        return datetime.datetime.fromisoformat(self.end)
+
+    @override
+    def describe(self) -> str:
+        return self.description
 
 
 async def list_savings_plans(session: boto3.Session, region: str) -> list[SavingsPlan]:
