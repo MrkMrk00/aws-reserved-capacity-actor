@@ -58,7 +58,7 @@ class ReservedCapacity(FromDictMixin, Expiriable):
 
     @override
     def get_link(self, region: str = 'us-east-1') -> str:
-        return f'https://{region}.console.aws.amazon.com/dynamodbv2/home?region={region}#reserved-capacity'
+        return f'https://{region}.console.aws.amazon.com/dynamodbv2/home?region={region}#reserved-capacity'  # noqa: E501
 
     @override
     def get_id(self) -> str:
@@ -176,7 +176,7 @@ class SavingsPlan(FromDictMixin, Expiriable):
 
     @override
     def get_link(self, region: str = 'us-east-1') -> str:
-        return f'https://{region}.console.aws.amazon.com/costmanagement/home#/savings-plans/inventory'
+        return f'https://{region}.console.aws.amazon.com/costmanagement/home#/savings-plans/inventory'  # noqa: E501
 
     @override
     def get_id(self) -> str:
