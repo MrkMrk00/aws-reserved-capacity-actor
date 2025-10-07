@@ -3,13 +3,21 @@
     "type": "object",
     "schemaVersion": 1,
     "properties": {
-        "days": {
-            "title": "Notify time delta",
+        "days_urgent": {
+            "title": "Urgent notification time delta (days)",
             "type": "integer",
-            "description": "How many days in advance to notify.",
+            "description": "How many days before the resource expiration to send URGENT notifications.",
             "editor": "number",
             "prefill": 3
         },
+        "days_notify": {
+            "title": "Reminder time delta (days)",
+            "type": "integer",
+            "description": "How many days in advance to send a friendly reminder about expiring resources.",
+            "editor": "number",
+            "prefill": 14
+        },
+
         "aws_access_key_id": {
             "title": "AWS access key ID",
             "type": "string",
@@ -30,7 +38,13 @@
             "description": "",
             "editor": "textfield",
             "isSecret": true
+        },
+        "slack_channel_id": {
+            "title": "Slack channel id",
+            "type": "string",
+            "description": "",
+            "editor": "textfield"
         }
     },
-    "required": ["days", "aws_access_key_id", "aws_secret_access_key", "slack_bot_key"]
+    "required": ["days_urgent", "days_notify", "aws_access_key_id", "aws_secret_access_key", "slack_bot_key", "slack_channel_id"]
 }

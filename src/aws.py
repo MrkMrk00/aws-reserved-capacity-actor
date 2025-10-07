@@ -2,19 +2,20 @@ import abc
 import asyncio
 import dataclasses
 import datetime
+import http
 import json
 import urllib
-from typing import TYPE_CHECKING, Self, override
+from typing import Self, override
 
 import boto3
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 
-if TYPE_CHECKING:
-    import http
-
 
 class Expiriable(abc.ABC):
+    @abc.abstractmethod
+    def get_id(self) -> str: ...
+
     @abc.abstractmethod
     def is_active(self) -> bool: ...
 
@@ -50,6 +51,10 @@ class ReservedCapacity(FromDictMixin, Expiriable):
     UsageType: str
 
     @override
+    def get_id(self) -> str:
+        return self.__class__.__name__ + self.ReservedCapacityId
+
+    @override
     def is_active(self) -> bool:
         return self.ReservedCapacityState == 'active'
 
@@ -61,7 +66,7 @@ class ReservedCapacity(FromDictMixin, Expiriable):
 
     @override
     def describe(self) -> str:
-        return self.__repr__()
+        return f'DynamoDB Reserved Capacity for ${self.upfront_cost():.2f}'
 
     def start_date(self) -> datetime.datetime:
         unix_timestamp = int(self.StartDate) / 1000
@@ -69,7 +74,7 @@ class ReservedCapacity(FromDictMixin, Expiriable):
         return datetime.datetime.fromtimestamp(unix_timestamp, datetime.timezone.utc)
 
     def upfront_cost(self):
-        return int(self.FixedPrice) * self.InstanceCount
+        return self.FixedPrice * self.InstanceCount
 
 
 _RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
@@ -149,7 +154,6 @@ async def list_dynamodb_reserved_capacities(
 @dataclasses.dataclass
 class SavingsPlan(FromDictMixin, Expiriable):
     commitment: str
-    currency: str
     description: str
     # end has format '2026-11-06T12:59:59.000Z'
     end: str
@@ -157,6 +161,10 @@ class SavingsPlan(FromDictMixin, Expiriable):
     savingsPlanId: str
     savingsPlanType: str
     state: str
+
+    @override
+    def get_id(self) -> str:
+        return self.__class__.__name__ + self.savingsPlanId
 
     @override
     def is_active(self) -> bool:
@@ -168,7 +176,7 @@ class SavingsPlan(FromDictMixin, Expiriable):
 
     @override
     def describe(self) -> str:
-        return self.description
+        return f'{self.description} for ${float(self.commitment):.2f}'
 
 
 async def list_savings_plans(session: boto3.Session, region: str) -> list[SavingsPlan]:
