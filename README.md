@@ -21,7 +21,7 @@ The Actor expects the following JSON input:
     "days_notify": 14,
     "aws_access_key_id": "ASDIOUHB53OJLK",
     "aws_secret_access_key": "********************************",
-    "slack_bot_key": "********************************",
+    "slack_bot_token": "********************************",
     "slack_channel_id": "ASDKJGKJ24123UZH"
 }
 ```
@@ -30,7 +30,7 @@ The Actor expects the following JSON input:
 |--------|------|-----------|-------------|
 | `aws_access_key_id` | string | yes | AWS Access Key ID with permissions to query Savings Plans and DynamoDB Reserved Capacity. |
 | `aws_secret_access_key` | string | yes | AWS Secret Access Key. |
-| `slack_bot_key` | string | yes | Slack Bot OAuth token (used to send messages via the Slack API). |
+| `slack_bot_token` | string | yes | Slack Bot OAuth token (used to send messages via the Slack API). |
 | `slack_channel_id` | string | yes | ID of the Slack channel where notifications should be posted. |
 | `days_notify` | number | yes | Number of days before expiration to send a reminder (default: `14`). |
 | `days_urgent` | number | yes | Number of days before expiration to mark an item as urgent and spam notifications every day (default: `3`). |

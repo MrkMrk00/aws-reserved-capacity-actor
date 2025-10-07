@@ -17,7 +17,6 @@
             "editor": "number",
             "prefill": 14
         },
-
         "aws_access_key_id": {
             "title": "AWS access key ID",
             "type": "string",
@@ -32,7 +31,7 @@
             "editor": "textfield",
             "isSecret": true
         },
-        "slack_bot_key": {
+        "slack_bot_token": {
             "title": "Slack bot key",
             "type": "string",
             "description": "",
@@ -46,5 +45,5 @@
             "editor": "textfield"
         }
     },
-    "required": ["days_urgent", "days_notify", "aws_access_key_id", "aws_secret_access_key", "slack_bot_key", "slack_channel_id"]
+    "required": ["days_urgent", "days_notify", "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id"]
 }
