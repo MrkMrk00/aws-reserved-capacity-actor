@@ -17,6 +17,9 @@ class Expiriable(abc.ABC):
     def get_id(self) -> str: ...
 
     @abc.abstractmethod
+    def get_link(self, region: str = 'us-east-1') -> str: ...
+
+    @abc.abstractmethod
     def is_active(self) -> bool: ...
 
     @abc.abstractmethod
@@ -49,6 +52,10 @@ class ReservedCapacity(FromDictMixin, Expiriable):
     StartDate: str
     UsagePrice: float
     UsageType: str
+
+    @override
+    def get_link(self, region: str = 'us-east-1') -> str:
+        return f'https://{region}.console.aws.amazon.com/dynamodbv2/home?region={region}#reserved-capacity'
 
     @override
     def get_id(self) -> str:
@@ -161,6 +168,10 @@ class SavingsPlan(FromDictMixin, Expiriable):
     savingsPlanId: str
     savingsPlanType: str
     state: str
+
+    @override
+    def get_link(self, region: str = 'us-east-1') -> str:
+        return f'https://{region}.console.aws.amazon.com/costmanagement/home#/savings-plans/inventory'
 
     @override
     def get_id(self) -> str:

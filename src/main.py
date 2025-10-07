@@ -71,7 +71,7 @@ These AWS savings plans will be expiring very soon! You might want to renew them
     for plan in urgent_plans:
         days_remaining = (plan.valid_until() - now).days
 
-        text += f'- {plan.describe()} (expiring in **{days_remaining}** days)\n'
+        text += f'- {plan.describe()} (expiring in **{days_remaining}** days) [(link)]({plan.get_link()})\n'
 
     Actor.log.info(f'sending urgent notification\n{text=}')
 
@@ -100,8 +100,12 @@ Hi.
 There seem to be some savings plans in AWS that will be expiring soon. Just letting you know ;)
 
 """
+    now = datetime.datetime.now().astimezone()
+
     for plan in non_urgent_plans:
-        text += f'- {plan.describe()}\n'
+        days_remaining = (plan.valid_until() - now).days
+
+        text += f'- {plan.describe()} (expiring in {days_remaining} days) [(link)]({plan.get_link()})\n'
 
     Actor.log.info(f'sending non_urgent notification\n{text=}')
 
