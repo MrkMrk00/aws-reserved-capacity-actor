@@ -42,9 +42,6 @@ class FromDictMixin:
         return cls(**data)
 
 
-_US_EAST_TZ = datetime.timezone(datetime.timedelta(hours=-4))
-
-
 @dataclasses.dataclass
 class ReservedCapacity(FromDictMixin, Expiriable):
     DurationSeconds: int
