@@ -44,70 +44,71 @@ class ReservedCapacity:
         return cls(**data)
 
 
-class CustomAwsClient:
-    RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
+_RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
 
-    def __init__(
-            self,
-            session: boto3.Session,
-            region: str
-    ):
-        self._session = session
-        self._region = region
 
-    def _make_request(
-            self,
-            service: str,
-            rpc_target: str,
-            body: dict,
-            method: str = 'POST',
-    ) -> requests.Response:
-        credentials = self._session.get_credentials().get_frozen_credentials()
+def _make_request(
+    session: boto3.Session,
+    region: str,
+    service: str,
+    rpc_target: str,
+    api_identification: tuple[str, str],
+    method: str = 'POST',
+    body: dict = {},
+):
+    credentials = session.get_credentials().get_frozen_credentials()
 
-        url = f'https://{service}.{self._region}.amazonaws.com/'
-        headers = {
-            'Host': f'{service}.{self._region}.amazonaws.com',
-            'Content-Type': 'application/x-amz-json-1.0',
-            'X-Amz-Target': rpc_target,
-            'X-Amz-User-Agent': 'aws-sdk-js/1.0.0 os/macOS/10.15 lang/js md/browser/Firefox_144.0 api/dynamodbreservedcapacity/1.0.0',
-        }
-        body = json.dumps(body).encode()
+    url = f'https://{service}.{region}.amazonaws.com/'
+    headers = {
+        'Host': f'{service}.{region}.amazonaws.com',
+        'Content-Type': 'application/x-amz-json-1.0',
+        'X-Amz-Target': rpc_target,
+        'X-Amz-User-Agent': f'aws-sdk-js/1.0.0 os/macOS/10.15 lang/js md/browser/Firefox_144.0 api/{api_identification[0]}/{api_identification[1]}',
+    }
+    body = json.dumps(body).encode()
 
-        request = AWSRequest(method=method, url=url,
-                             data=body, headers=headers)
+    request = AWSRequest(method=method, url=url,
+                         data=body, headers=headers)
 
-        SigV4Auth(credentials, service_name=service,
-                  region_name=self._region).add_auth(request)
+    SigV4Auth(credentials, service_name=service,
+              region_name=region).add_auth(request)
 
-        prepared_headers = dict(request.headers.items())
+    prepared_headers = dict(request.headers.items())
 
-        response = requests.request(
-            method, url, headers=prepared_headers, data=body)
+    response = requests.request(
+        method, url, headers=prepared_headers, data=body)
 
-        return response
+    return response
 
-    def dynamodb_reserved_capacities(self) -> list[ReservedCapacity]:
-        objects = []
 
-        start_key = 0
-        while True:
-            response = self._make_request(
-                'dynamodb',
-                self.RPC_RESERVED_CAPACITY,
-                {'ExclusiveStartKey': str(start_key)},
-            )
-            assert response.status_code == 200
+def list_dynamodb_reserved_capacities(
+    session: boto3.Session,
+    region: str,
+) -> list[ReservedCapacity]:
+    objects = []
 
-            body = response.json()
-            objects.extend(ReservedCapacity.from_dict(json_capacity)
-                           for json_capacity in body.get('ReservedCapacities'))
+    start_key = 0
+    while True:
+        response = _make_request(
+            session,
+            region,
+            'dynamodb',
+            _RPC_RESERVED_CAPACITY,
+            ('dynamodbreservedcapacity', '1.0.0'),
+            body={'ExclusiveStartKey': str(start_key)},
+        )
+        assert response.status_code == 200
 
-            next_pager = int(body.get('LastEvaluatedKey'))
+        body = response.json()
+        objects.extend(ReservedCapacity.from_dict(json_capacity)
+                       for json_capacity in body.get('ReservedCapacities'))
 
-            # no more items to fetch
-            if next_pager - start_key > len(body.get('ReservedCapacities')):
-                break
-            else:
-                start_key = next_pager
+        next_pager = int(body.get('LastEvaluatedKey'))
 
-        return objects
+        # no more items to fetch
+        if next_pager - start_key > len(body.get('ReservedCapacities')):
+            break
+        else:
+            start_key = next_pager
+
+    return objects
