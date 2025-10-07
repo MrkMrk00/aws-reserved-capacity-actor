@@ -59,7 +59,6 @@ async def _make_custom_request(
         region: str,
         service: str,
         rpc_target: str,
-        api_identification: tuple[str, str],
         method: str = 'POST',
         body: dict = {}) -> dict | None:
     credentials = session.get_credentials().get_frozen_credentials()
@@ -69,7 +68,6 @@ async def _make_custom_request(
         'Host': f'{service}.{region}.amazonaws.com',
         'Content-Type': 'application/x-amz-json-1.0',
         'X-Amz-Target': rpc_target,
-        'X-Amz-User-Agent': f'aws-sdk-js/1.0.0 os/macOS/10.15 lang/js md/browser/Firefox_144.0 api/{api_identification[0]}/{api_identification[1]}',
     }
     body = json.dumps(body).encode()
 
@@ -110,7 +108,6 @@ async def list_dynamodb_reserved_capacities(
             region,
             'dynamodb',
             _RPC_RESERVED_CAPACITY,
-            ('dynamodbreservedcapacity', '1.0.0'),
             body={'ExclusiveStartKey': str(start_key)},
         )
 
