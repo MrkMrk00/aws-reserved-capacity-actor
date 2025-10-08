@@ -7,8 +7,9 @@ This [Apify Actor](https://apify.com/actors) retrieves AWS DynamoDB reserved cap
     - DynamoDB Reserved Capacity details
     - Compute Savings Plans (with expiration and commitment details)
 - Detects and highlights upcoming expirations
-- Calculates remaining days
 - Sends a formatted notification to a Slack channel using a bot
+    - 3 rounds of notifications (dates configurable) - LONG, SHORT and URGENT
+    - "urgent" notification period = notifications get sent every day before resource expiration
 - Fully configurable via Actor input
 
 ## Input Configuration
