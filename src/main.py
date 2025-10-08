@@ -89,9 +89,14 @@ These AWS savings plans will be expiring very soon! You might want to renew them
 
     Actor.log.info('sending urgent notification')
 
-    return await asyncio.to_thread(client.chat_postMessage,
-                                   channel=channel_name,
-                                   markdown_text=text.strip())
+    if os.environ.get('DEBUG'):
+        Actor.log.info(f'====================\n{text}\n====================\n')
+
+        return None
+    else:
+        return await asyncio.to_thread(client.chat_postMessage,
+                                       channel=channel_name,
+                                       markdown_text=text.strip())
 
 
 async def handle_notify_non_urgent(client: slack_sdk.WebClient,
@@ -119,9 +124,13 @@ There seem to be some savings plans in AWS that will be expiring soon. Just lett
 
     Actor.log.info('sending non_urgent notification')
 
-    result = await asyncio.to_thread(client.chat_postMessage,
-                                     channel=channel_name,
-                                     markdown_text=text.strip())
+    result = None
+    if os.environ.get('DEBUG'):
+        Actor.log.info(f'====================\n{text}\n====================\n')
+    else:
+        result = await asyncio.to_thread(client.chat_postMessage,
+                                         channel=channel_name,
+                                         markdown_text=text.strip())
 
     # save the new ids into sent notification
     #    -> do not send this notification multiple times
@@ -129,6 +138,15 @@ There seem to be some savings plans in AWS that will be expiring soon. Just lett
     await store.set_value(SENT_NOTIFICATIONS_KEY, new_ids)
 
     return result
+
+
+async def cleanup_kv_store(store: KeyValueStore, savings_plans: Expiriable) -> None:
+    savings_plans_ids = {sp.get_id() for sp in savings_plans}
+    saved_keys = set(await store.get_value(SENT_NOTIFICATIONS_KEY, []))
+
+    only_existing_keys = saved_keys.intersection(savings_plans_ids)
+
+    await store.set_value(SENT_NOTIFICATIONS_KEY, list(only_existing_keys))
 
 
 async def main() -> None:
@@ -180,3 +198,4 @@ async def main() -> None:
         )
 
         await asyncio.gather(non_urgent_future, urgent_future)
+        await cleanup_kv_store(store, all_savings_plans)
