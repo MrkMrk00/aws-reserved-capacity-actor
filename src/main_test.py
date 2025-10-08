@@ -64,14 +64,14 @@ class KVStoreCleanupTestCase(unittest.IsolatedAsyncioTestCase):
         ]
 
         store: KeyValueStore = await self.actor.open_key_value_store(name='test_store')
-        await store.set_value(SENT_NOTIFICATIONS_KEY, [r.get_id() for r in rcs])
+        await store.set_value(SENT_NOTIFICATIONS_KEY, [r.id for r in rcs])
 
         self.assertEqual(
             await store.get_value(SENT_NOTIFICATIONS_KEY),
-            [rcs[0].get_id(), rcs[1].get_id()],
+            [rcs[0].id, rcs[1].id],
         )
 
         rcs.pop()
         await cleanup_kv_store(store, rcs)
 
-        self.assertEqual(await store.get_value(SENT_NOTIFICATIONS_KEY), [rcs[0].get_id()])
+        self.assertEqual(await store.get_value(SENT_NOTIFICATIONS_KEY), [rcs[0].id])
