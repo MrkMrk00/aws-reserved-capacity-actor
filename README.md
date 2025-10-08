@@ -18,7 +18,9 @@ The Actor expects the following JSON input:
 ```json
 {
     "days_urgent": 3,
-    "days_notify": 14,
+    "days_reminder_short": 14,
+    "days_reminder_long": 30,
+    "ignored_uuids": ["5002de99-8a0f-45bf-8e1a-4c6b58cb26e4"],
     "aws_access_key_id": "ASDIOUHB53OJLK",
     "aws_secret_access_key": "********************************",
     "slack_bot_token": "********************************",
@@ -32,7 +34,9 @@ The Actor expects the following JSON input:
 | `aws_secret_access_key` | string | yes | AWS Secret Access Key. |
 | `slack_bot_token` | string | yes | Slack Bot OAuth token (used to send messages via the Slack API). |
 | `slack_channel_id` | string | yes | ID of the Slack channel where notifications should be posted. |
-| `days_notify` | number | yes | Number of days before expiration to send a reminder (default: `14`). |
+| `days_reminder_long` | number | yes | How many days before the resource expiration to send the FIRST notification notifications. |
+| `days_reminder_short` | number | yes | How many days before the resource expiration to send the SECOND notification notifications. |
 | `days_urgent` | number | yes | Number of days before expiration to mark an item as urgent and spam notifications every day (default: `3`). |
+| `ignored_uuids` | string[] | no | UUIDs of resources to ignore (not to send notificatons about) |
 
 
