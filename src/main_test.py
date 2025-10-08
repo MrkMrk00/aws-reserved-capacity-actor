@@ -2,11 +2,8 @@ import datetime
 import math
 import unittest
 
-from apify import Actor
-from crawlee.storages import KeyValueStore
-
+from .notifications import get_expiring_soon
 from .aws import ReservedCapacity
-from .main import SENT_NOTIFICATIONS_KEY, cleanup_kv_store, get_expiring_soon
 
 
 def _create_test_reserved_capacity(id: str, expire_date: datetime.datetime):
@@ -45,33 +42,3 @@ class ExpiringTimingTestCase(unittest.TestCase):
 
         self.assertEqual(len(expiring_soon), 1)
         self.assertEqual(expiring_soon[0].ReservedCapacityId, '1')
-
-
-class KVStoreCleanupTestCase(unittest.IsolatedAsyncioTestCase):
-    actor: Actor
-
-    async def asyncSetUp(self):
-        self.actor = Actor(exit_process=False)
-        await self.actor.init()
-
-    async def asyncTearDown(self):
-        await self.actor.exit()
-
-    async def test_deletes_old_data_from_kv_store(self):
-        rcs = [
-            _create_test_reserved_capacity('0', datetime.datetime.now()),
-            _create_test_reserved_capacity('1', datetime.datetime.now()),
-        ]
-
-        store: KeyValueStore = await self.actor.open_key_value_store(name='test_store')
-        await store.set_value(SENT_NOTIFICATIONS_KEY, [r.id for r in rcs])
-
-        self.assertEqual(
-            await store.get_value(SENT_NOTIFICATIONS_KEY),
-            [rcs[0].id, rcs[1].id],
-        )
-
-        rcs.pop()
-        await cleanup_kv_store(store, rcs)
-
-        self.assertEqual(await store.get_value(SENT_NOTIFICATIONS_KEY), [rcs[0].id])
