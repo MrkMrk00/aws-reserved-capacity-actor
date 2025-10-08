@@ -3,9 +3,10 @@ import asyncio
 import dataclasses
 import datetime
 import http
+import itertools
 import json
 import urllib
-from typing import Self, override
+from typing import Generator, Iterable, Self, override
 
 import boto3
 from botocore.auth import SigV4Auth
@@ -13,8 +14,8 @@ from botocore.awsrequest import AWSRequest
 
 
 class Expiriable(abc.ABC):
-    @abc.abstractmethod
-    def get_id(self) -> str: ...
+    @abc.abstractproperty
+    def id(self) -> str: ...
 
     @abc.abstractmethod
     def get_link(self, region: str = 'us-east-1') -> str: ...
@@ -57,9 +58,9 @@ class ReservedCapacity(FromDictMixin, Expiriable):
     def get_link(self, region: str = 'us-east-1') -> str:
         return f'https://{region}.console.aws.amazon.com/dynamodbv2/home?region={region}#reserved-capacity'  # noqa: E501
 
-    @override
-    def get_id(self) -> str:
-        return self.__class__.__name__ + self.ReservedCapacityId
+    @property
+    def id(self) -> str:
+        return self.ReservedCapacityId
 
     @override
     def is_active(self) -> bool:
@@ -85,7 +86,41 @@ class ReservedCapacity(FromDictMixin, Expiriable):
         return self.FixedPrice * self.InstanceCount
 
 
-_RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
+@dataclasses.dataclass
+class SavingsPlan(FromDictMixin, Expiriable):
+    commitment: str
+    description: str
+    # start/end has format '2026-11-06T12:59:59.000Z'
+    start: str
+    end: str
+    offeringId: str
+    savingsPlanId: str
+    savingsPlanType: str
+    state: str
+
+    @override
+    def get_link(self, region: str = 'us-east-1') -> str:
+        return f'https://{region}.console.aws.amazon.com/costmanagement/home#/savings-plans/inventory'  # noqa: E501
+
+    @property
+    def id(self) -> str:
+        return self.savingsPlanId
+
+    @override
+    def is_active(self) -> bool:
+        return self.state == 'active'
+
+    @override
+    def valid_until(self) -> datetime.datetime:
+        return datetime.datetime.fromisoformat(self.end)
+
+    @override
+    def describe(self) -> str:
+        return f'{self.description} for ${float(self.commitment):.2f}'
+
+    @override
+    def start_date(self) -> datetime.datetime:
+        return datetime.datetime.fromisoformat(self.start)
 
 
 async def _make_custom_request(
@@ -130,94 +165,74 @@ async def _make_custom_request(
     return await asyncio.to_thread(_do_fetch, request)
 
 
-async def list_dynamodb_reserved_capacities(
-        session: boto3.Session,
-        region: str) -> list[ReservedCapacity]:
-    objects = []
+class SavingsRepository:
+    _RPC_RESERVED_CAPACITY = 'ReservedCapacity_20120810.DescribeReservedCapacity'
 
-    start_key = 0
-    while True:
-        response = await _make_custom_request(
-            session,
-            region,
-            'dynamodb',
-            _RPC_RESERVED_CAPACITY,
-            body={'ExclusiveStartKey': str(start_key)},
-        )
+    def __init__(self, session: boto3.Session):
+        self._session = session
+        self._ignored_uuids = set()
 
-        objects.extend(ReservedCapacity.from_dict(json_capacity)
-                       for json_capacity in response.get('ReservedCapacities'))
+    async def _list_dynamodb_reserved_capacities(self) -> list[ReservedCapacity]:
+        objects = []
+        pager = 0
 
-        next_pager = int(response.get('LastEvaluatedKey'))
+        while True:
+            response = await _make_custom_request(
+                self._session,
+                self._session.region_name,
+                'dynamodb',
+                self._RPC_RESERVED_CAPACITY,
+                body={'ExclusiveStartKey': str(pager)},
+            )
 
-        # no more items to fetch
-        if next_pager - start_key > len(response.get('ReservedCapacities')):
-            break
-        else:
-            start_key = next_pager
+            objects.extend(ReservedCapacity.from_dict(json_capacity)
+                           for json_capacity in response.get('ReservedCapacities'))
 
-    return objects
+            next_pager = int(response.get('LastEvaluatedKey'))
+            if next_pager - pager > len(response.get('ReservedCapacities')):
+                break
+            else:
+                pager = next_pager
 
+        return objects
 
-@dataclasses.dataclass
-class SavingsPlan(FromDictMixin, Expiriable):
-    commitment: str
-    description: str
-    # start/end has format '2026-11-06T12:59:59.000Z'
-    start: str
-    end: str
-    offeringId: str
-    savingsPlanId: str
-    savingsPlanType: str
-    state: str
+    async def _list_savings_plans(self) -> list[SavingsPlan]:
+        max_results = 1000
+        objects: list[SavingsPlan] = []
+        pager = None
+        client = self._session.client('savingsplans', region_name=self._session.region_name)
 
-    @override
-    def get_link(self, region: str = 'us-east-1') -> str:
-        return f'https://{region}.console.aws.amazon.com/costmanagement/home#/savings-plans/inventory'  # noqa: E501
+        while True:
+            params = {'maxResults': max_results}
+            if pager is not None:
+                params['nextToken'] = pager
 
-    @override
-    def get_id(self) -> str:
-        return self.__class__.__name__ + self.savingsPlanId
+            response = await asyncio.to_thread(client.describe_savings_plans, **params)
 
-    @override
-    def is_active(self) -> bool:
-        return self.state == 'active'
+            savings_plans = response['savingsPlans']
+            if len(savings_plans) == 0:
+                break
 
-    @override
-    def valid_until(self) -> datetime.datetime:
-        return datetime.datetime.fromisoformat(self.end)
+            objects.extend(SavingsPlan.from_dict(sp) for sp in savings_plans)
 
-    @override
-    def describe(self) -> str:
-        return f'{self.description} for ${float(self.commitment):.2f}'
+            if len(savings_plans) >= max_results and 'nextToken' in response:
+                pager = response['nextToken']
+            else:
+                break
 
-    @override
-    def start_date(self) -> datetime.datetime:
-        return datetime.datetime.fromisoformat(self.start)
+        return objects
 
+    async def collect_resources(self) -> list[Expiriable]:
+        resources: Iterable[Expiriable] = itertools.chain.from_iterable(await asyncio.gather(
+            self._list_dynamodb_reserved_capacities(),
+            self._list_savings_plans(),
+        ))
 
-async def list_savings_plans(session: boto3.Session, region: str) -> list[SavingsPlan]:
-    max_results = 1000
-    objects: list[SavingsPlan] = []
-    pager = None
-    client = session.client('savingsplans', region_name=region)
+        # collect eagerly - so not to return an async generator
+        return list(filter(
+            lambda r: r.id not in self._ignored_uuids,
+            resources,
+        ))
 
-    while True:
-        params = {'maxResults': max_results}
-        if pager is not None:
-            params['nextToken'] = pager
-
-        response = await asyncio.to_thread(client.describe_savings_plans, **params)
-
-        savings_plans = response['savingsPlans']
-        if len(savings_plans) == 0:
-            break
-
-        objects.extend(SavingsPlan.from_dict(sp) for sp in savings_plans)
-
-        if len(savings_plans) >= max_results and 'nextToken' in response:
-            pager = response['nextToken']
-        else:
-            break
-
-    return objects
+    def ignore_uuids(self, ignored_uuids: Iterable[str]):
+        self._ignored_uuids.update(ignored_uuids)

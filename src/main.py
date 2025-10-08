@@ -1,37 +1,16 @@
 import asyncio
-import datetime
 import os
-from typing import Generator, Iterable
 
 import boto3
 import slack_sdk
 from apify import Actor
 from crawlee.storages import KeyValueStore
 
-from .aws import (Expiriable, ReservedCapacity, SavingsPlan,
-                  list_dynamodb_reserved_capacities, list_savings_plans)
+from .aws import Expiriable, SavingsRepository
+from .notifications import Notification, cleanup_kv_store, get_expiring_soon
 
 ORG_ACCOUNT_REGION = 'us-east-1'
 STORE_NAME = 'slack-notifications'
-SENT_NOTIFICATIONS_KEY = 'notifications-sent'
-
-
-def get_expiring_soon(
-        capacities: Iterable[Expiriable],
-        notify_period: datetime.timedelta) -> Generator[ReservedCapacity]:
-    for capacity in capacities:
-        now = datetime.datetime.now().astimezone()
-        valid_until = capacity.valid_until()
-
-        if not capacity.is_active() or valid_until < now:
-            continue
-
-        #                V(now+notify_period)
-        # ---|--------|--|-----
-        #    ^now     ^valid_until
-
-        if valid_until <= now + notify_period:
-            yield capacity
 
 
 def create_aws_session(actor_input: dict) -> boto3.Session:
@@ -50,103 +29,24 @@ def create_aws_session(actor_input: dict) -> boto3.Session:
     )
 
 
-def _format_resource_row(resource: Expiriable, bolden: bool = False) -> str:
-    now = datetime.datetime.now().astimezone()
-    expiring_in = (resource.valid_until() - now).days
-    bought_date = resource.start_date().strftime('%Y-%m-%d')
-
-    text = resource.describe()
-    text += ' (expiring in '
-
-    if bolden:
-        text += f'**{expiring_in}**'
-    else:
-        text += str(expiring_in)
-
-    text += f' days - bought: {bought_date}) '
-    text += f'([link]({resource.get_link()}))'
-
-    return text
-
-
-async def handle_notify_urgent(client: slack_sdk.WebClient,
-                               channel_name: str,
-                               store: KeyValueStore,
-                               delta: datetime.timedelta,
-                               saving_plans: list[Expiriable]):
-    urgent_plans = list(get_expiring_soon(saving_plans, delta))
-    if len(urgent_plans) <= 0:
-        Actor.log.info('no urgent notifications to be sent')
-        return
-
-    text = """\
-Hey!
-These AWS savings plans will be expiring very soon! You might want to renew them.
-
-"""
-    for plan in urgent_plans:
-        text += f'- {_format_resource_row(plan, bolden=True)}\n'
-
-    Actor.log.info('sending urgent notification')
+async def handle_slack_notification(
+    notification_type: Notification,
+    resources: list[Expiriable],
+    client: slack_sdk.WebClient,
+    channel_name: str,
+) -> None:
+    text = notification_type.create_notification_text(resources)
 
     if os.environ.get('DEBUG'):
-        Actor.log.info(f'====================\n{text}\n====================\n')
+        print(f'Notification ({notification_type.value}): \n{text}')
 
-        return None
-    else:
-        return await asyncio.to_thread(client.chat_postMessage,
-                                       channel=channel_name,
-                                       markdown_text=text.strip())
-
-
-async def handle_notify_non_urgent(client: slack_sdk.WebClient,
-                                   channel_name: str,
-                                   store: KeyValueStore,
-                                   delta: datetime.timedelta,
-                                   saving_plans: list[Expiriable]):
-    sent_ids = set(await store.get_value(SENT_NOTIFICATIONS_KEY, []))
-    non_urgent_plans = list(get_expiring_soon(
-        filter(lambda sp: sp.get_id() not in sent_ids, saving_plans),
-        delta
-    ))
-
-    if len(non_urgent_plans) <= 0:
-        Actor.log.info('no non_urgent notifications to be sent')
         return
 
-    text = """\
-Hi.
-There seem to be some savings plans in AWS that will be expiring soon. Just letting you know ;)
-
-"""
-    for plan in non_urgent_plans:
-        text += f'- {_format_resource_row(plan)}\n'
-
-    Actor.log.info('sending non_urgent notification')
-
-    result = None
-    if os.environ.get('DEBUG'):
-        Actor.log.info(f'====================\n{text}\n====================\n')
-    else:
-        result = await asyncio.to_thread(client.chat_postMessage,
-                                         channel=channel_name,
-                                         markdown_text=text.strip())
-
-    # save the new ids into sent notification
-    #    -> do not send this notification multiple times
-    new_ids = [*(plan.get_id() for plan in non_urgent_plans), *sent_ids]
-    await store.set_value(SENT_NOTIFICATIONS_KEY, new_ids)
-
-    return result
-
-
-async def cleanup_kv_store(store: KeyValueStore, savings_plans: Expiriable) -> None:
-    savings_plans_ids = {sp.get_id() for sp in savings_plans}
-    saved_keys = set(await store.get_value(SENT_NOTIFICATIONS_KEY, []))
-
-    only_existing_keys = saved_keys.intersection(savings_plans_ids)
-
-    await store.set_value(SENT_NOTIFICATIONS_KEY, list(only_existing_keys))
+    return await asyncio.to_thread(
+        client.chat_postMessage,
+        channel=channel_name,
+        markdown_text=text,
+    )
 
 
 async def main() -> None:
@@ -162,40 +62,59 @@ async def main() -> None:
             'Slack channel id was not provided'
 
         session = create_aws_session(input)
+        savings_repo = SavingsRepository(session)
         store: KeyValueStore = await Actor.open_key_value_store(name=STORE_NAME)
         slack = slack_sdk.WebClient(token=slack_bot_token)
 
-        reserved_capacities: list[ReservedCapacity]
-        savings_plans: list[SavingsPlan]
-
-        reserved_capacities, savings_plans = await asyncio.gather(
-            list_dynamodb_reserved_capacities(session, ORG_ACCOUNT_REGION),
-            list_savings_plans(session, ORG_ACCOUNT_REGION),
-        )
-
-        all_savings_plans = [*reserved_capacities, *savings_plans]
-        if len(all_savings_plans) <= 0:
+        savings_resources: list[Expiriable] = list(await savings_repo.collect_resources())
+        if len(savings_resources) <= 0:
             Actor.log.info('no notifications to be send, skipping')
             return
 
-        non_urgent_notify_delta = datetime.timedelta(days=input.get('days_notify'))
-        urgent_delta = datetime.timedelta(days=input.get('days_urgent'))
+        notification_futures = []
 
-        non_urgent_future = handle_notify_non_urgent(
-            client=slack,
-            channel_name=slack_channel_id,
-            store=store,
-            delta=non_urgent_notify_delta,
-            saving_plans=all_savings_plans
-        )
+        # ==================== LONG NOTIFICATION
+        long_reminder_delta = Notification.REMINDER_LONG.notify_delta(input)
+        long_notified_ids = set(await store.get_value(Notification.REMINDER_LONG.store_key, []))
+        to_notify_long = list(get_expiring_soon(
+            savings_resources, long_reminder_delta, ignore_ids=long_notified_ids))
 
-        urgent_future = handle_notify_urgent(
-            client=slack,
-            channel_name=slack_channel_id,
-            store=store,
-            delta=urgent_delta,
-            saving_plans=all_savings_plans
-        )
+        if len(to_notify_long) > 0:
+            notification_futures.append(handle_slack_notification(
+                Notification.REMINDER_LONG,
+                resources=to_notify_long,
+                client=slack,
+                channel_name=slack_channel_id,
+            ))
+        # ====================
 
-        await asyncio.gather(non_urgent_future, urgent_future)
-        await cleanup_kv_store(store, all_savings_plans)
+        # ==================== SHORT NOTIFICATION
+        short_reminder_delta = Notification.REMINDER_SHORT.notify_delta(input)
+        short_notified_ids = set(await store.get_value(Notification.REMINDER_SHORT.store_key, []))
+        to_notify_short = list(get_expiring_soon(
+            savings_resources, short_reminder_delta, ignore_ids=short_notified_ids))
+
+        if len(to_notify_short) > 0:
+            notification_futures.append(handle_slack_notification(
+                Notification.REMINDER_SHORT,
+                resources=to_notify_short,
+                client=slack,
+                channel_name=slack_channel_id,
+            ))
+
+        # ==================== URGENT NOTIFICATION
+        urgent_reminder_delta = Notification.URGENT.notify_delta(input)
+        to_notify_urgently = list(get_expiring_soon(savings_resources, urgent_reminder_delta))
+
+        if len(to_notify_urgently) > 0:
+            notification_futures.append(handle_slack_notification(
+                Notification.URGENT,
+                resources=to_notify_urgently,
+                client=slack,
+                channel_name=slack_channel_id,
+            ))
+        # ====================
+
+        await asyncio.gather(*notification_futures)
+        await cleanup_kv_store(Notification.REMINDER_LONG, store, savings_resources)
+        await cleanup_kv_store(Notification.REMINDER_SHORT, store, savings_resources)
