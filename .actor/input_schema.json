@@ -3,20 +3,35 @@
     "type": "object",
     "schemaVersion": 1,
     "properties": {
-        "days_urgent": {
-            "title": "Urgent notification time delta (days)",
+        "days_reminder_long": {
+            "title": "First reminder time delta (days)",
             "type": "integer",
-            "description": "How many days before the resource expiration to send URGENT notifications.",
+            "description": "How many days before the resource expiration to send the FIRST notification notifications.",
             "editor": "number",
-            "prefill": 3
+            "prefill": 30
         },
-        "days_notify": {
-            "title": "Reminder time delta (days)",
+        "days_reminder_short": {
+            "title": "Second reminder time delta (days)",
             "type": "integer",
-            "description": "How many days in advance to send a friendly reminder about expiring resources.",
+            "description": "How many days before the resource expiration to send the SECOND notification notifications.",
             "editor": "number",
             "prefill": 14
         },
+        "days_urgent": {
+            "title": "Urgent notification time delta (days)",
+            "type": "integer",
+            "description": "How many days before the resource expiration to start sending URGENT notifications every day.",
+            "editor": "number",
+            "prefill": 3
+        },
+
+        "ignored_uuids": {
+            "title": "UUIDs of resources to ignore (not to send notificatons about)",
+            "type": "array",
+            "editor": "stringList",
+            "description": ""
+        },
+
         "aws_access_key_id": {
             "title": "AWS access key ID",
             "type": "string",
@@ -45,5 +60,6 @@
             "editor": "textfield"
         }
     },
-    "required": ["days_urgent", "days_notify", "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id"]
+    "required": ["days_urgent", "days_reminder_long", "days_reminder_short",
+        "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id"]
 }

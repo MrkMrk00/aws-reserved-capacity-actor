@@ -86,6 +86,9 @@ async def mark_resources_as_notified(
         store: KeyValueStore,
         resources: Iterable[Expiriable],
 ) -> None:
+    if notification_type is Notification.URGENT:
+        return
+
     previous_ids = set(await store.get_value(notification_type.store_key, []))
     previous_ids.update(r.id for r in resources)
 

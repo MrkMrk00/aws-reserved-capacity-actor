@@ -7,7 +7,8 @@ from apify import Actor
 from crawlee.storages import KeyValueStore
 
 from .aws import Expiriable, SavingsRepository
-from .notifications import Notification, cleanup_kv_store, get_expiring_soon
+from .notifications import (Notification, cleanup_kv_store, get_expiring_soon,
+                            mark_resources_as_notified)
 
 ORG_ACCOUNT_REGION = 'us-east-1'
 STORE_NAME = 'slack-notifications'
@@ -32,6 +33,7 @@ def create_aws_session(actor_input: dict) -> boto3.Session:
 async def handle_slack_notification(
     notification_type: Notification,
     resources: list[Expiriable],
+    store: KeyValueStore,
     client: slack_sdk.WebClient,
     channel_name: str,
 ) -> None:
@@ -42,11 +44,14 @@ async def handle_slack_notification(
 
         return
 
-    return await asyncio.to_thread(
+    result = await asyncio.to_thread(
         client.chat_postMessage,
         channel=channel_name,
         markdown_text=text,
     )
+    await mark_resources_as_notified(notification_type, store, resources)
+
+    return result
 
 
 async def main() -> None:
@@ -62,9 +67,11 @@ async def main() -> None:
             'Slack channel id was not provided'
 
         session = create_aws_session(input)
-        savings_repo = SavingsRepository(session)
         store: KeyValueStore = await Actor.open_key_value_store(name=STORE_NAME)
         slack = slack_sdk.WebClient(token=slack_bot_token)
+        savings_repo = SavingsRepository(session)
+
+        savings_repo.ignore_uuids(input.get('ignored_uuids', []))
 
         savings_resources: list[Expiriable] = list(await savings_repo.collect_resources())
         if len(savings_resources) <= 0:
@@ -83,6 +90,7 @@ async def main() -> None:
             notification_futures.append(handle_slack_notification(
                 Notification.REMINDER_LONG,
                 resources=to_notify_long,
+                store=store,
                 client=slack,
                 channel_name=slack_channel_id,
             ))
@@ -98,6 +106,7 @@ async def main() -> None:
             notification_futures.append(handle_slack_notification(
                 Notification.REMINDER_SHORT,
                 resources=to_notify_short,
+                store=store,
                 client=slack,
                 channel_name=slack_channel_id,
             ))
@@ -110,6 +119,7 @@ async def main() -> None:
             notification_futures.append(handle_slack_notification(
                 Notification.URGENT,
                 resources=to_notify_urgently,
+                store=store,
                 client=slack,
                 channel_name=slack_channel_id,
             ))
