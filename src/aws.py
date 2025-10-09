@@ -6,7 +6,7 @@ import http
 import itertools
 import json
 import urllib
-from typing import Generator, Iterable, Self, override
+from typing import Iterable, Self, override
 
 import boto3
 from botocore.auth import SigV4Auth
@@ -97,6 +97,7 @@ class SavingsPlan(FromDictMixin, Expiriable):
     savingsPlanId: str
     savingsPlanType: str
     state: str
+    tags: dict[str, str]
 
     @override
     def get_link(self, region: str = 'us-east-1') -> str:
