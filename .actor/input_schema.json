@@ -58,6 +58,12 @@
             "type": "string",
             "description": "",
             "editor": "textfield"
+        },
+        "default_owner": {
+            "title": "Default resource owner ID (e-mail)",
+            "type": "string",
+            "description": "",
+            "editor": "textfield"
         }
     },
     "required": ["days_urgent", "days_reminder_long", "days_reminder_short",

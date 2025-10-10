@@ -1,7 +1,10 @@
+import asyncio
 import datetime
 import enum
+from functools import lru_cache
 from typing import Generator, Iterable
 
+import slack_sdk
 from crawlee.storages import KeyValueStore
 
 from .aws import Expiriable
@@ -9,7 +12,7 @@ from .aws import Expiriable
 _SENT_NOTIFICATIONS_KEY = 'notifications-sent'
 
 
-def _format_resource_row(resource: Expiriable, bolden: bool = False) -> str:
+def _format_resource_row(resource: Expiriable, owner_slack_id: str | None, bolden: bool = False) -> str:
     now = datetime.datetime.now().astimezone()
     expiring_in = (resource.valid_until() - now).days
     bought_date = resource.start_date().strftime('%Y-%m-%d')
@@ -23,6 +26,8 @@ def _format_resource_row(resource: Expiriable, bolden: bool = False) -> str:
         text += str(expiring_in)
 
     text += f' days - bought: {bought_date}) '
+    if owner_slack_id is not None:
+        text += f' <@{owner_slack_id}> '
     text += f'([link]({resource.get_link()}))'
 
     return text
@@ -43,20 +48,48 @@ class Notification(enum.StrEnum):
     def store_key(self):
         return f'{_SENT_NOTIFICATIONS_KEY}-{str(self)}'
 
-    def create_notification_text(self, resources: list[Expiriable]):
-        message: str
-        match self:
-            case Notification.URGENT:
-                message = 'Hey!\n'
-                message += 'These AWS savings plans will be expiring very soon! You might want to renew them.\n\n'  # noqa: E501
-            case _:
-                message = 'Hi.\n'
-                message += 'There seem to be some savings plans in AWS that will be expiring soon. Just letting you know ;)\n\n'  # noqa: E501
 
-        for resource in resources:
-            message += f'- {_format_resource_row(resource, bolden=self is Notification.URGENT)}\n'
+@lru_cache
+async def _get_slack_id_for_email(slack: slack_sdk.WebClient, email: str) -> str | None:
+    users = await asyncio.to_thread(slack.users_list)
+    members = users.get('members')
 
-        return message
+    for member in members:
+        member_email = member['profile']['email']
+        if member_email != email:
+            continue
+
+        return member['id']
+
+    # not found
+    return None
+
+
+async def create_notification_text(
+    notification: Notification,
+    slack: slack_sdk.WebClient,
+    resources: list[Expiriable],
+    default_owner: str | None,
+) -> str:
+    message: str
+    match notification:
+        case Notification.URGENT:
+            message = 'Hey!\n'
+            message += 'These AWS savings plans will be expiring very soon! You might want to renew them.\n\n'  # noqa: E501
+        case _:
+            message = 'Hi.\n'
+            message += 'There seem to be some savings plans in AWS that will be expiring soon. Just letting you know ;)\n\n'  # noqa: E501
+
+    for resource in resources:
+        owner_email = resource.owner or default_owner
+        owner = None
+
+        if owner_email is not None:
+            owner = await _get_slack_id_for_email(slack, owner_email)
+
+        message += f'- {_format_resource_row(resource, owner, bolden=notification is Notification.URGENT)}\n'
+
+    return message
 
 
 def get_expiring_soon(
