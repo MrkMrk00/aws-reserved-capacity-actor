@@ -1,7 +1,7 @@
 import asyncio
 import datetime
 import enum
-from functools import lru_cache
+from functools import cache
 from typing import Generator, Iterable
 
 import slack_sdk
@@ -49,10 +49,14 @@ class Notification(enum.StrEnum):
         return f'{_SENT_NOTIFICATIONS_KEY}-{str(self)}'
 
 
-@lru_cache
+@cache
+async def _fetch_slack_users(slack: slack_sdk.WebClient):
+    return await asyncio.to_thread(slack.users_list)
+
+
 async def _get_slack_id_for_email(slack: slack_sdk.WebClient, email: str) -> str | None:
-    users = await asyncio.to_thread(slack.users_list)
-    members = users.get('members')
+    slack_users = await _fetch_slack_users(slack)
+    members = slack_users.get('members')
 
     for member in members:
         member_email = member['profile']['email']
