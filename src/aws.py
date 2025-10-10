@@ -17,6 +17,9 @@ class Expiriable(abc.ABC):
     @abc.abstractproperty
     def id(self) -> str: ...
 
+    @abc.abstractproperty
+    def owner(self) -> str | None: ...
+
     @abc.abstractmethod
     def get_link(self, region: str = 'us-east-1') -> str: ...
 
@@ -31,6 +34,7 @@ class Expiriable(abc.ABC):
 
     @abc.abstractmethod
     def describe(self) -> str: ...
+
 
 
 class FromDictMixin:
@@ -61,6 +65,10 @@ class ReservedCapacity(FromDictMixin, Expiriable):
     @property
     def id(self) -> str:
         return self.ReservedCapacityId
+
+    @property
+    def owner(self) -> str | None:
+        return None
 
     @override
     def is_active(self) -> bool:
@@ -106,6 +114,10 @@ class SavingsPlan(FromDictMixin, Expiriable):
     @property
     def id(self) -> str:
         return self.savingsPlanId
+
+    @property
+    def owner(self) -> str | None:
+        return self.tags.get('owner')
 
     @override
     def is_active(self) -> bool:

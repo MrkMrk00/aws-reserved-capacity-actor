@@ -7,7 +7,8 @@ from apify import Actor
 from crawlee.storages import KeyValueStore
 
 from .aws import Expiriable, SavingsRepository
-from .notifications import (Notification, cleanup_kv_store, get_expiring_soon,
+from .notifications import (Notification, cleanup_kv_store,
+                            create_notification_text, get_expiring_soon,
                             mark_resources_as_notified)
 
 ORG_ACCOUNT_REGION = 'us-east-1'
@@ -36,8 +37,14 @@ async def handle_slack_notification(
     store: KeyValueStore,
     client: slack_sdk.WebClient,
     channel_name: str,
+    default_owner: str | None,
 ) -> None:
-    text = notification_type.create_notification_text(resources)
+    text = await create_notification_text(
+        notification=notification_type,
+        slack=client,
+        resources=resources,
+        default_owner=default_owner,
+    )
 
     if os.environ.get('DEBUG'):
         print(f'Notification ({notification_type.value}): \n{text}')
@@ -58,6 +65,7 @@ async def main() -> None:
     async with Actor:
         input = await Actor.get_input()
 
+        default_owner = input.get('default_owner')
         slack_bot_token = input.get('slack_bot_token', os.environ.get('SLACK_BOT_TOKEN'))
         assert slack_bot_token is not None, \
             'Slack bot token was not provided'
@@ -93,6 +101,7 @@ async def main() -> None:
                 store=store,
                 client=slack,
                 channel_name=slack_channel_id,
+                default_owner=default_owner,
             ))
         # ====================
 
@@ -109,6 +118,7 @@ async def main() -> None:
                 store=store,
                 client=slack,
                 channel_name=slack_channel_id,
+                default_owner=default_owner,
             ))
 
         # ==================== URGENT NOTIFICATION
@@ -122,6 +132,7 @@ async def main() -> None:
                 store=store,
                 client=slack,
                 channel_name=slack_channel_id,
+                default_owner=default_owner,
             ))
         # ====================
 
