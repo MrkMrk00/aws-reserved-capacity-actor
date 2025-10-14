@@ -58,6 +58,12 @@
             "editor": "textfield",
             "prefill": "us-east-1"
         },
+        "store_name": {
+            "title": "KV store",
+            "type": "string",
+            "description": "Select a kv store",
+            "resourceType": "keyValueStore"
+        },
 
         "ignored_uuids": {
             "title": "UUIDs of resources to ignore (not to send notificatons about)",
@@ -70,15 +76,8 @@
             "type": "string",
             "description": "",
             "editor": "textfield"
-        },
-        "store_name": {
-            "title": "Store name with UUIDs of resources with notificatons already sent",
-            "type": "string",
-            "description": "The actor will store UUIDs of AWS resources, that for which a notification was already sent, to not send them multiple times.",
-            "editor": "textfield",
-            "prefill": "slack-notifications"
         }
     },
     "required": ["days_urgent", "days_reminder_long", "days_reminder_short",
-        "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id", "aws_account_region"]
+        "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id", "aws_account_region", "store_name"]
 }
