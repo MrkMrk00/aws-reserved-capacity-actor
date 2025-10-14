@@ -1,7 +1,7 @@
 [project]
 name = "aws-reserved-capacity-notifier"
 version = "0.0.1"
-description = "A modern Apify actor for scraping website data."
+description = "Get a notification about expiring AWS savings resources."
 readme = "README.md"
 
 authors = [

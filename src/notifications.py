@@ -1,7 +1,6 @@
 import asyncio
 import datetime
 import enum
-from functools import cache
 from typing import Generator, Iterable
 
 import slack_sdk
@@ -12,7 +11,27 @@ from .aws import Expiriable
 _SENT_NOTIFICATIONS_KEY = 'notifications-sent'
 
 
-def _format_resource_row(resource: Expiriable, owner_slack_id: str | None, bolden: bool = False) -> str:
+def acache(async_func):
+    """
+    ignores parameters!!!
+    """
+    previous_value = None
+
+    async def _decorated(*args, **kwargs):
+        nonlocal previous_value
+        if previous_value is None:
+            previous_value = await async_func(*args, **kwargs)
+
+        return previous_value
+
+    return _decorated
+
+
+def _format_resource_row(
+        resource: Expiriable,
+        owner_slack_id: str | None,
+        bolden: bool = False,
+) -> str:
     now = datetime.datetime.now().astimezone()
     expiring_in = (resource.valid_until() - now).days
     bought_date = resource.start_date().strftime('%Y-%m-%d')
@@ -49,7 +68,7 @@ class Notification(enum.StrEnum):
         return f'{_SENT_NOTIFICATIONS_KEY}-{str(self)}'
 
 
-@cache
+@acache
 async def _fetch_slack_users(slack: slack_sdk.WebClient):
     return await asyncio.to_thread(slack.users_list)
 
@@ -91,7 +110,7 @@ async def create_notification_text(
         if owner_email is not None:
             owner = await _get_slack_id_for_email(slack, owner_email)
 
-        message += f'- {_format_resource_row(resource, owner, bolden=notification is Notification.URGENT)}\n'
+        message += f'- {_format_resource_row(resource, owner, bolden=notification is Notification.URGENT)}\n'  # noqa: E501
 
     return message
 
@@ -126,7 +145,7 @@ async def mark_resources_as_notified(
     if notification_type is Notification.URGENT:
         return
 
-    previous_ids = set(await store.get_value(notification_type.store_key, []))
+    previous_ids: set[str] = set(await store.get_value(notification_type.store_key, []))
     previous_ids.update(r.id for r in resources)
 
     await store.set_value(notification_type.store_key, list(previous_ids))
@@ -138,7 +157,7 @@ async def cleanup_kv_store(
         all_savings_plans: Iterable[Expiriable],
 ) -> None:
     savings_plans_ids = {sp.id for sp in all_savings_plans}
-    saved_keys = set(await store.get_value(notification_type.store_key, []))
+    saved_keys: set[str] = set(await store.get_value(notification_type.store_key, []))
 
     only_existing_keys = saved_keys.intersection(savings_plans_ids)
 
