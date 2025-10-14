@@ -51,14 +51,12 @@ async def handle_slack_notification(
 
         return
 
-    result = await asyncio.to_thread(
+    await asyncio.to_thread(
         client.chat_postMessage,
         channel=channel_name,
         markdown_text=text,
     )
     await mark_resources_as_notified(notification_type, store, resources)
-
-    return result
 
 
 async def main() -> None:
@@ -66,11 +64,13 @@ async def main() -> None:
         input = await Actor.get_input()
 
         default_owner = input.get('default_owner')
-        slack_bot_token = input.get('slack_bot_token', os.environ.get('SLACK_BOT_TOKEN'))
+        slack_bot_token = input.get(
+            'slack_bot_token', os.environ.get('SLACK_BOT_TOKEN'))
         assert slack_bot_token is not None, \
             'Slack bot token was not provided'
 
-        slack_channel_id = input.get('slack_channel_id', os.environ.get('SLACK_CHANNEL_ID'))
+        slack_channel_id = input.get(
+            'slack_channel_id', os.environ.get('SLACK_CHANNEL_ID'))
         assert slack_channel_id is not None, \
             'Slack channel id was not provided'
 
@@ -90,7 +90,7 @@ async def main() -> None:
 
         # ==================== LONG NOTIFICATION
         long_reminder_delta = Notification.REMINDER_LONG.notify_delta(input)
-        long_notified_ids = set(await store.get_value(Notification.REMINDER_LONG.store_key, []))
+        long_notified_ids: set[str] = set(await store.get_value(Notification.REMINDER_LONG.store_key, []))  # noqa: E501
         to_notify_long = list(get_expiring_soon(
             savings_resources, long_reminder_delta, ignore_ids=long_notified_ids))
 
@@ -107,7 +107,7 @@ async def main() -> None:
 
         # ==================== SHORT NOTIFICATION
         short_reminder_delta = Notification.REMINDER_SHORT.notify_delta(input)
-        short_notified_ids = set(await store.get_value(Notification.REMINDER_SHORT.store_key, []))
+        short_notified_ids: set[str] = set(await store.get_value(Notification.REMINDER_SHORT.store_key, []))  # noqa: E501
         to_notify_short = list(get_expiring_soon(
             savings_resources, short_reminder_delta, ignore_ids=short_notified_ids))
 
@@ -123,7 +123,8 @@ async def main() -> None:
 
         # ==================== URGENT NOTIFICATION
         urgent_reminder_delta = Notification.URGENT.notify_delta(input)
-        to_notify_urgently = list(get_expiring_soon(savings_resources, urgent_reminder_delta))
+        to_notify_urgently = list(get_expiring_soon(
+            savings_resources, urgent_reminder_delta))
 
         if len(to_notify_urgently) > 0:
             notification_futures.append(handle_slack_notification(

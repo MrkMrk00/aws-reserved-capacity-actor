@@ -5,7 +5,7 @@ import datetime
 import http
 import itertools
 import json
-import urllib
+import urllib.request
 from typing import Iterable, Self, override
 
 import boto3
@@ -36,10 +36,12 @@ class Expiriable(abc.ABC):
     def describe(self) -> str: ...
 
 
-
 class FromDictMixin:
     @classmethod
     def from_dict(cls, dct: dict) -> Self:
+        if not dataclasses.is_dataclass(cls):
+            raise TypeError(f'{cls.__name__} is not a dataclass')
+
         # unsure no extra fields in dct
         fields = {field.name for field in dataclasses.fields(cls)}
         data = {k: v for k, v in dct.items() if k in fields}
@@ -143,7 +145,10 @@ async def _make_custom_request(
         rpc_target: str,
         method: str = 'POST',
         body: dict = {}) -> dict | None:
-    credentials = session.get_credentials().get_frozen_credentials()
+    credentials = session.get_credentials()
+    assert credentials is not None
+
+    frozen_credentials = credentials.get_frozen_credentials()
 
     url = f'https://{service}.{region}.amazonaws.com/'
     headers = {
@@ -151,26 +156,26 @@ async def _make_custom_request(
         'Content-Type': 'application/x-amz-json-1.0',
         'X-Amz-Target': rpc_target,
     }
-    body = json.dumps(body).encode()
+    body_encoded = json.dumps(body).encode()
 
-    request = AWSRequest(method=method, url=url,
-                         data=body, headers=headers)
+    aws_request = AWSRequest(method=method, url=url,
+                             data=body_encoded, headers=headers)
 
-    SigV4Auth(credentials, service_name=service,
-              region_name=region).add_auth(request)
+    SigV4Auth(frozen_credentials, service_name=service,
+              region_name=region).add_auth(aws_request)
 
-    prepared_headers = dict(request.headers.items())
+    prepared_headers = dict(aws_request.headers.items())
 
     request = urllib.request.Request(
         method=method,
         url=url,
-        data=body,
+        data=body_encoded,
         headers=prepared_headers,
     )
 
     def _do_fetch(req: urllib.request.Request):
+        res: http.client.HTTPResponse
         with urllib.request.urlopen(req) as res:
-            res: http.client.HTTPResponse
             assert res.status >= 200 and res.status < 300, res.read().decode()
 
             return json.loads(res.read().decode())
@@ -183,10 +188,10 @@ class SavingsRepository:
 
     def __init__(self, session: boto3.Session):
         self._session = session
-        self._ignored_uuids = set()
+        self._ignored_uuids: set[str] = set()
 
     async def _list_dynamodb_reserved_capacities(self) -> list[ReservedCapacity]:
-        objects = []
+        objects: list[ReservedCapacity] = []
         pager = 0
 
         while True:
@@ -198,11 +203,13 @@ class SavingsRepository:
                 body={'ExclusiveStartKey': str(pager)},
             )
 
-            objects.extend(ReservedCapacity.from_dict(json_capacity)
-                           for json_capacity in response.get('ReservedCapacities'))
+            assert response is not None
 
-            next_pager = int(response.get('LastEvaluatedKey'))
-            if next_pager - pager > len(response.get('ReservedCapacities')):
+            objects.extend(ReservedCapacity.from_dict(json_capacity)
+                           for json_capacity in response.get('ReservedCapacities', []))
+
+            next_pager = int(response.get('LastEvaluatedKey', '-1'))
+            if next_pager - pager > len(response.get('ReservedCapacities', [])):
                 break
             else:
                 pager = next_pager
@@ -213,7 +220,8 @@ class SavingsRepository:
         max_results = 1000
         objects: list[SavingsPlan] = []
         pager = None
-        client = self._session.client('savingsplans', region_name=self._session.region_name)
+        client = self._session.client(
+            'savingsplans', region_name=self._session.region_name)
 
         while True:
             params = {'maxResults': max_results}

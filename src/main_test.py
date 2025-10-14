@@ -1,9 +1,10 @@
 import datetime
 import math
 import unittest
+from typing import cast
 
-from .notifications import get_expiring_soon
 from .aws import ReservedCapacity
+from .notifications import get_expiring_soon
 
 
 def _create_test_reserved_capacity(id: str, expire_date: datetime.datetime):
@@ -35,10 +36,12 @@ class ExpiringTimingTestCase(unittest.TestCase):
             - datetime.timedelta(days=1)
         )
 
-        expiring_soon = list(get_expiring_soon([
+        _expiring_soon = list(get_expiring_soon([
             _create_test_reserved_capacity('0', should_not_notify_time),
             _create_test_reserved_capacity('1', should_notify_time),
         ], notify_delta))
+
+        expiring_soon = cast(list[ReservedCapacity], _expiring_soon)
 
         self.assertEqual(len(expiring_soon), 1)
         self.assertEqual(expiring_soon[0].ReservedCapacityId, '1')
