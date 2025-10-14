@@ -24,14 +24,19 @@
             "editor": "number",
             "prefill": 3
         },
-
-        "ignored_uuids": {
-            "title": "UUIDs of resources to ignore (not to send notificatons about)",
-            "type": "array",
-            "editor": "stringList",
-            "description": ""
+        "slack_bot_token": {
+            "title": "Slack bot key",
+            "type": "string",
+            "description": "",
+            "editor": "textfield",
+            "isSecret": true
         },
-
+        "slack_channel_id": {
+            "title": "Slack channel id",
+            "type": "string",
+            "description": "",
+            "editor": "textfield"
+        },
         "aws_access_key_id": {
             "title": "AWS access key ID",
             "type": "string",
@@ -46,20 +51,34 @@
             "editor": "textfield",
             "isSecret": true
         },
-        "slack_bot_token": {
-            "title": "Slack bot key",
+        "aws_account_region": {
+            "title": "AWS account region",
             "type": "string",
             "description": "",
             "editor": "textfield",
-            "isSecret": true
+            "prefill": "us-east-1"
         },
-        "slack_channel_id": {
-            "title": "Slack channel id",
+
+        "ignored_uuids": {
+            "title": "UUIDs of resources to ignore (not to send notificatons about)",
+            "type": "array",
+            "editor": "stringList",
+            "description": ""
+        },
+        "default_owner": {
+            "title": "Default resource owner ID (e-mail)",
             "type": "string",
             "description": "",
             "editor": "textfield"
+        },
+        "store_name": {
+            "title": "Store name with UUIDs of resources with notificatons already sent",
+            "type": "string",
+            "description": "The actor will store UUIDs of AWS resources, that for which a notification was already sent, to not send them multiple times.",
+            "editor": "textfield",
+            "prefill": "slack-notifications"
         }
     },
     "required": ["days_urgent", "days_reminder_long", "days_reminder_short",
-        "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id"]
+        "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id", "aws_account_region"]
 }

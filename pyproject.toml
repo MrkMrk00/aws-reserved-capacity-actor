@@ -1,0 +1,52 @@
+[project]
+name = "aws-reserved-capacity-notifier"
+version = "0.0.1"
+description = "Get a notification about expiring AWS savings resources."
+readme = "README.md"
+
+authors = [
+    {name = "Marek Hauschwitz", email = "marek.hauschwitz@apify.com"},
+]
+
+requires-python = ">=3.12"
+
+dependencies = [
+    "apify<4.0.0",
+    "boto3",
+    "slack-sdk",
+]
+
+license = {file = "LICENSE"}
+
+keywords = ["apify", "aws", "reserved-capacity", "dynamodb", "compute-savings", "notification"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    # types
+    "boto3-stubs",
+    "types-jmespath",
+
+    # linting
+    "flake8",
+    "Flake8-pyproject",
+    "mypy",
+    "isort",
+]
+
+[project.urls]
+# Homepage = ""
+Repository = "https://github.com/MrkMrk00/aws-reserved-capacity-actor/"
+
+
+[tool.flake8]
+max-line-length = 99
+
+[tool.mypy]
+python_executable = "./venv/bin/python3"
+check_untyped_defs = true

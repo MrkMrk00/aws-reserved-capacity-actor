@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import os
 
 import boto3
@@ -7,26 +8,31 @@ from apify import Actor
 from crawlee.storages import KeyValueStore
 
 from .aws import Expiriable, SavingsRepository
-from .notifications import (Notification, cleanup_kv_store, get_expiring_soon,
+from .notifications import (Notification, cleanup_kv_store,
+                            create_notification_text, get_expiring_soon,
                             mark_resources_as_notified)
 
-ORG_ACCOUNT_REGION = 'us-east-1'
-STORE_NAME = 'slack-notifications'
+
+@dataclasses.dataclass
+class Input:
+    days_reminder_long: int
+    days_reminder_short: int
+    days_urgent: int
+    slack_bot_token: str
+    slack_channel_id: str
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    aws_account_region: str
+    ignored_uuids: list[str] = dataclasses.field(default_factory=list)
+    default_owner: str | None = None
+    store_name: str = 'slack-notifications'
 
 
-def create_aws_session(actor_input: dict) -> boto3.Session:
-    access_key_id = actor_input.get('aws_access_key_id',
-                                    os.environ.get('AWS_ACCESS_KEY_ID'))
-    secret_access_key = actor_input.get('aws_secret_access_key',
-                                        os.environ.get('AWS_SECRET_ACCESS_KEY'))
-
-    assert access_key_id is not None and secret_access_key is not None, \
-        'AWS access token was not provided'
-
+def create_aws_session(input: Input) -> boto3.Session:
     return boto3.Session(
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-        region_name=ORG_ACCOUNT_REGION,
+        aws_access_key_id=input.aws_access_key_id,
+        aws_secret_access_key=input.aws_secret_access_key,
+        region_name=input.aws_account_region,
     )
 
 
@@ -36,42 +42,38 @@ async def handle_slack_notification(
     store: KeyValueStore,
     client: slack_sdk.WebClient,
     channel_name: str,
+    default_owner: str | None,
 ) -> None:
-    text = notification_type.create_notification_text(resources)
+    text = await create_notification_text(
+        notification=notification_type,
+        slack=client,
+        resources=resources,
+        default_owner=default_owner,
+    )
 
     if os.environ.get('DEBUG'):
         print(f'Notification ({notification_type.value}): \n{text}')
 
         return
 
-    result = await asyncio.to_thread(
+    await asyncio.to_thread(
         client.chat_postMessage,
         channel=channel_name,
         markdown_text=text,
     )
     await mark_resources_as_notified(notification_type, store, resources)
 
-    return result
-
 
 async def main() -> None:
     async with Actor:
-        input = await Actor.get_input()
-
-        slack_bot_token = input.get('slack_bot_token', os.environ.get('SLACK_BOT_TOKEN'))
-        assert slack_bot_token is not None, \
-            'Slack bot token was not provided'
-
-        slack_channel_id = input.get('slack_channel_id', os.environ.get('SLACK_CHANNEL_ID'))
-        assert slack_channel_id is not None, \
-            'Slack channel id was not provided'
+        input = Input(**await Actor.get_input())
 
         session = create_aws_session(input)
-        store: KeyValueStore = await Actor.open_key_value_store(name=STORE_NAME)
-        slack = slack_sdk.WebClient(token=slack_bot_token)
+        store: KeyValueStore = await Actor.open_key_value_store(name=input.store_name)
+        slack = slack_sdk.WebClient(token=input.slack_bot_token)
         savings_repo = SavingsRepository(session)
 
-        savings_repo.ignore_uuids(input.get('ignored_uuids', []))
+        savings_repo.ignore_uuids(input.ignored_uuids)
 
         savings_resources: list[Expiriable] = list(await savings_repo.collect_resources())
         if len(savings_resources) <= 0:
@@ -81,8 +83,10 @@ async def main() -> None:
         notification_futures = []
 
         # ==================== LONG NOTIFICATION
-        long_reminder_delta = Notification.REMINDER_LONG.notify_delta(input)
-        long_notified_ids = set(await store.get_value(Notification.REMINDER_LONG.store_key, []))
+        long_reminder_delta = Notification.REMINDER_LONG.notify_delta(
+            input.__dict__,
+        )
+        long_notified_ids: set[str] = set(await store.get_value(Notification.REMINDER_LONG.store_key, []))  # noqa: E501
         to_notify_long = list(get_expiring_soon(
             savings_resources, long_reminder_delta, ignore_ids=long_notified_ids))
 
@@ -92,13 +96,16 @@ async def main() -> None:
                 resources=to_notify_long,
                 store=store,
                 client=slack,
-                channel_name=slack_channel_id,
+                channel_name=input.slack_channel_id,
+                default_owner=input.default_owner,
             ))
         # ====================
 
         # ==================== SHORT NOTIFICATION
-        short_reminder_delta = Notification.REMINDER_SHORT.notify_delta(input)
-        short_notified_ids = set(await store.get_value(Notification.REMINDER_SHORT.store_key, []))
+        short_reminder_delta = Notification.REMINDER_SHORT.notify_delta(
+            input.__dict__,
+        )
+        short_notified_ids: set[str] = set(await store.get_value(Notification.REMINDER_SHORT.store_key, []))  # noqa: E501
         to_notify_short = list(get_expiring_soon(
             savings_resources, short_reminder_delta, ignore_ids=short_notified_ids))
 
@@ -108,12 +115,16 @@ async def main() -> None:
                 resources=to_notify_short,
                 store=store,
                 client=slack,
-                channel_name=slack_channel_id,
+                channel_name=input.slack_channel_id,
+                default_owner=input.default_owner,
             ))
 
         # ==================== URGENT NOTIFICATION
-        urgent_reminder_delta = Notification.URGENT.notify_delta(input)
-        to_notify_urgently = list(get_expiring_soon(savings_resources, urgent_reminder_delta))
+        urgent_reminder_delta = Notification.URGENT.notify_delta(
+            input.__dict__,
+        )
+        to_notify_urgently = list(get_expiring_soon(
+            savings_resources, urgent_reminder_delta))
 
         if len(to_notify_urgently) > 0:
             notification_futures.append(handle_slack_notification(
@@ -121,7 +132,8 @@ async def main() -> None:
                 resources=to_notify_urgently,
                 store=store,
                 client=slack,
-                channel_name=slack_channel_id,
+                channel_name=input.slack_channel_id,
+                default_owner=input.default_owner,
             ))
         # ====================
 
