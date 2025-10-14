@@ -62,7 +62,8 @@
             "title": "KV store",
             "type": "string",
             "description": "Select a kv store",
-            "resourceType": "keyValueStore"
+            "resourceType": "keyValueStore",
+            "resourcePermissions": ["READ", "WRITE"]
         },
 
         "ignored_uuids": {
