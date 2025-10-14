@@ -8,9 +8,9 @@ PROJECT_DIR = 'src/'
 
 def main():
     commands = [
-        ('flake8', PROJECT_DIR),
-        ('mypy', '--config-file', 'pyproject.toml', PROJECT_DIR),
-        ('isort', '--check', PROJECT_DIR),
+        (sys.executable, '-m', 'flake8', PROJECT_DIR),
+        (sys.executable, '-m', 'mypy', '--config-file', 'pyproject.toml', PROJECT_DIR),
+        (sys.executable, '-m', 'isort', '--check', PROJECT_DIR),
     ]
 
     procs = [(subprocess.Popen(cmd), cmd) for cmd in commands]
