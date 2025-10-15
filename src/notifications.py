@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import enum
+from pprint import pprint
 from typing import Generator, Iterable
 
 import slack_sdk
@@ -78,11 +79,10 @@ async def _get_slack_id_for_email(slack: slack_sdk.WebClient, email: str) -> str
     members = slack_users.get('members')
 
     for member in members:
-        member_email = member['profile']['email']
-        if member_email != email:
-            continue
+        member_email = member.get('profile', {}).get('email')
 
-        return member['id']
+        if member_email == email:
+            return member['id']
 
     # not found
     return None
