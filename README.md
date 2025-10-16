@@ -35,6 +35,11 @@ To run the Actor locally first enter the `venv` with `. ./venv/bin/activate` and
 
 ## Input Configuration
 
+! Make sure the Slack app has the following permissions:
+- `chat:write`
+- `users:read`
+- `users:read.email`
+
 The Actor expects the following JSON input:
 
 ```{json}

@@ -65,6 +65,13 @@
             "resourceType": "keyValueStore",
             "resourcePermissions": ["READ", "WRITE"]
         },
+        "target_resource": {
+            "title": "Which AWS savings resource to monitor",
+            "type": "string",
+            "editor": "select",
+            "description": "Select an AWS resource",
+            "enum": ["dynamodb_reserved_capacity", "compute_savings_plan"]
+        },
 
         "ignored_uuids": {
             "title": "UUIDs of resources to ignore (not to send notificatons about)",
@@ -80,5 +87,5 @@
         }
     },
     "required": ["days_urgent", "days_reminder_long", "days_reminder_short",
-        "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id", "aws_account_region", "store_name"]
+        "aws_access_key_id", "aws_secret_access_key", "slack_bot_token", "slack_channel_id", "aws_account_region", "store_name", "target_resource"]
 }

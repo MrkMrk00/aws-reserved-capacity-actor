@@ -28,26 +28,23 @@ def acache(async_func):
 
 
 def _format_resource_row(
-        resource: Expiriable,
-        owner_slack_id: str | None,
-        bolden: bool = False,
+    resource: Expiriable,
+    owner_slack_id: str | None,
 ) -> str:
-    now = datetime.datetime.now().astimezone()
-    expiring_in = (resource.valid_until() - now).days
-    bought_date = resource.start_date().strftime('%Y-%m-%d')
+    indent = ''
+    text = ''
 
-    text = resource.describe()
-    text += ' (expiring in '
-
-    if bolden:
-        text += f'**{expiring_in}**'
-    else:
-        text += str(expiring_in)
-
-    text += f' days - bought: {bought_date}) '
+    description = resource.describe()
+    text += f'{indent}- {description.title}'
+    text += f' ([link]({resource.get_link()}))'
     if owner_slack_id is not None:
-        text += f' <@{owner_slack_id}> '
-    text += f'([link]({resource.get_link()}))'
+        text += f' <@{owner_slack_id}>'
+
+    text += '\n'
+    indent = 4*' '
+
+    text += f'{indent}- '
+    text += f'\n{indent}- '.join(description.blocks)
 
     return text
 
@@ -78,11 +75,10 @@ async def _get_slack_id_for_email(slack: slack_sdk.WebClient, email: str) -> str
     members = slack_users.get('members')
 
     for member in members:
-        member_email = member['profile']['email']
-        if member_email != email:
-            continue
+        member_email = member.get('profile', {}).get('email')
 
-        return member['id']
+        if member_email == email:
+            return member['id']
 
     # not found
     return None
@@ -110,7 +106,7 @@ async def create_notification_text(
         if owner_email is not None:
             owner = await _get_slack_id_for_email(slack, owner_email)
 
-        message += f'- {_format_resource_row(resource, owner, bolden=notification is Notification.URGENT)}\n'  # noqa: E501
+        message += f'{_format_resource_row(resource, owner)}\n'  # noqa: E501
 
     return message
 
