@@ -3,7 +3,7 @@
     "name": "aws-reserved-capacity-notifier",
     "title": "Get a notification about expiring AWS savings resources.",
     "description": "Sends a Slack notification for expiring DynamoDB Reserved Capacities and Compute Savings Plans.",
-    "version": "0.0",
+    "version": "1.0",
     "buildTag": "latest",
     "meta": {
         "templateId": "python-start"

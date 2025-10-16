@@ -1,6 +1,6 @@
 [project]
 name = "aws-reserved-capacity-notifier"
-version = "0.0.1"
+version = "1.0.0"
 description = "Get a notification about expiring AWS savings resources."
 readme = "README.md"
 
