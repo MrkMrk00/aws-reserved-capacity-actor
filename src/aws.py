@@ -2,15 +2,22 @@ import abc
 import asyncio
 import dataclasses
 import datetime
+import enum
 import http
 import itertools
 import json
 import urllib.request
-from typing import Iterable, Self, override
+from typing import Coroutine, Iterable, Self, cast, override
 
 import boto3
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
+
+
+@dataclasses.dataclass
+class Description:
+    title: str
+    blocks: Iterable[str] = tuple()
 
 
 class Expiriable(abc.ABC):
@@ -33,7 +40,7 @@ class Expiriable(abc.ABC):
     def valid_until(self) -> datetime.datetime: ...
 
     @abc.abstractmethod
-    def describe(self) -> str: ...
+    def describe(self) -> Description: ...
 
 
 class FromDictMixin:
@@ -83,8 +90,17 @@ class ReservedCapacity(FromDictMixin, Expiriable):
         return self.start_date() + valid_delta
 
     @override
-    def describe(self) -> str:
-        return f'DynamoDB Reserved Capacity for ${self.upfront_cost():.2f}'
+    def describe(self) -> Description:
+        days_remaining = (self.valid_until() - self.start_date()).days
+        start_date = self.start_date().strftime('%Y-%m-%d')
+
+        return Description(
+            title=f'DynamoDB Reserved Capacity for ${self.upfront_cost():.2f}',
+            blocks=(
+                f'ID: `{self.id}`',
+                f'Expiring in {days_remaining} days; bought: {start_date}',
+            )
+        )
 
     @override
     def start_date(self) -> datetime.datetime:
@@ -130,8 +146,19 @@ class SavingsPlan(FromDictMixin, Expiriable):
         return datetime.datetime.fromisoformat(self.end)
 
     @override
-    def describe(self) -> str:
-        return f'{self.description} for ${float(self.commitment):.2f}'
+    def describe(self) -> Description:
+        days_remaining = (self.valid_until() - self.start_date()).days
+        start_date = self.start_date().strftime('%Y-%m-%d')
+        tags_as_str = ', '.join(f'`{k}={v}`' for k, v in self.tags.items())
+
+        return Description(
+            title=f'{self.description} for ${float(self.commitment):.2f}',
+            blocks=(
+                f'ID: `{self.id}`',
+                f'Expiring in {days_remaining} days; bought: {start_date}',
+                f'Tags: {tags_as_str}',
+            )
+        )
 
     @override
     def start_date(self) -> datetime.datetime:
@@ -181,6 +208,15 @@ async def _make_custom_request(
             return json.loads(res.read().decode())
 
     return await asyncio.to_thread(_do_fetch, request)
+
+
+class SupportedResource(enum.StrEnum):
+    DYNAMODB_RESERVED_CAPACITY = enum.auto()
+    COMPUTE_SAVINGS_PLAN = enum.auto()
+
+    @classmethod
+    def all(cls) -> Iterable['SupportedResource']:
+        return (r for r in cls)
 
 
 class SavingsRepository:
@@ -243,11 +279,25 @@ class SavingsRepository:
 
         return objects
 
-    async def collect_resources(self) -> list[Expiriable]:
-        resources: Iterable[Expiriable] = itertools.chain.from_iterable(await asyncio.gather(
-            self._list_dynamodb_reserved_capacities(),
-            self._list_savings_plans(),
-        ))
+    async def collect_resources(
+        self,
+        resources_to_fetch: Iterable[SupportedResource],
+    ) -> list[Expiriable]:
+        resource_futures: list[Coroutine] = []
+
+        for resource_descr in resources_to_fetch:
+            match resource_descr:
+                case SupportedResource.COMPUTE_SAVINGS_PLAN:
+                    resource_futures.append(
+                        cast(Coroutine, self._list_savings_plans()))
+
+                case SupportedResource.DYNAMODB_RESERVED_CAPACITY:
+                    resource_futures.append(
+                        cast(Coroutine, self._list_dynamodb_reserved_capacities()))
+
+        resources: Iterable[Expiriable] = itertools.chain.from_iterable(
+            await asyncio.gather(*resource_futures),
+        )
 
         # collect eagerly - so not to return an async generator
         return list(filter(

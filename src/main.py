@@ -7,7 +7,7 @@ import slack_sdk
 from apify import Actor
 from crawlee.storages import KeyValueStore
 
-from .aws import Expiriable, SavingsRepository
+from .aws import Expiriable, SavingsRepository, SupportedResource
 from .notifications import (Notification, cleanup_kv_store,
                             create_notification_text, get_expiring_soon,
                             mark_resources_as_notified)
@@ -23,6 +23,8 @@ class Input:
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_account_region: str
+    # TODO: for improvement, allow multiple resources
+    target_resource: SupportedResource
     ignored_uuids: list[str] = dataclasses.field(default_factory=list)
     default_owner: str | None = None
     store_name: str = 'slack-notifications'
@@ -75,7 +77,9 @@ async def main() -> None:
 
         savings_repo.ignore_uuids(input.ignored_uuids)
 
-        savings_resources: list[Expiriable] = list(await savings_repo.collect_resources())
+        savings_resources: list[Expiriable] = list(await savings_repo.collect_resources(
+            (input.target_resource, ),
+        ))
         if len(savings_resources) <= 0:
             Actor.log.info('no notifications to be send, skipping')
             return
