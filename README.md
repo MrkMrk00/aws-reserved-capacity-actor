@@ -54,7 +54,8 @@ The Actor expects the following JSON input:
     "aws_account_region": "us-east-1",
     "slack_channel_id": "ASDKJGKJ24123UZH",
     "default_owner": "someone@example.com",
-    "store_name": "slack-notifications"
+    "store_name": "slack-notifications",
+    "target_resource": "dynamodb_reserved_capacity"
 }
 ```
 
@@ -68,6 +69,7 @@ The Actor expects the following JSON input:
 | `days_reminder_long` | number | yes | How many days before the resource expiration to send the FIRST notification notifications. |
 | `days_reminder_short` | number | yes | How many days before the resource expiration to send the SECOND notification notifications. |
 | `days_urgent` | number | yes | Number of days before expiration to mark an item as urgent and spam notifications every day (default: `3`). |
+| `target_resource` | string | yes | Which AWS savings resource to monitor. |
 | `ignored_uuids` | string[] | no | UUIDs of resources to ignore (not to send notificatons about) |
 | `default_owner` | string | no | The email address of the default owner to tag in the notification. (if not present in `tags.owner`) |
 | `store_name` | string | no | Name of the key-value store in which to store the UUIDs of already notified resources. |
