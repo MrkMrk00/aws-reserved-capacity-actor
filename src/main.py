@@ -25,9 +25,9 @@ class Input:
     aws_account_region: str
     # TODO: for improvement, allow multiple resources
     target_resource: SupportedResource
+    store_name: str
     ignored_uuids: list[str] = dataclasses.field(default_factory=list)
     default_owner: str | None = None
-    store_name: str = 'slack-notifications'
 
 
 def create_aws_session(input: Input) -> boto3.Session:
@@ -71,7 +71,7 @@ async def main() -> None:
         input = Input(**await Actor.get_input())
 
         session = create_aws_session(input)
-        store: KeyValueStore = await Actor.open_key_value_store(name=input.store_name)
+        store: KeyValueStore = await Actor.open_key_value_store(id=input.store_name)
         slack = slack_sdk.WebClient(token=input.slack_bot_token)
         savings_repo = SavingsRepository(session)
 
