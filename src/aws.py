@@ -91,7 +91,9 @@ class ReservedCapacity(FromDictMixin, Expiriable):
 
     @override
     def describe(self) -> Description:
-        days_remaining = (self.valid_until() - self.start_date()).days
+        days_remaining = (
+            self.valid_until() - datetime.datetime.now(datetime.timezone.utc)
+        ).days
         start_date = self.start_date().strftime('%Y-%m-%d')
 
         return Description(
@@ -147,7 +149,10 @@ class SavingsPlan(FromDictMixin, Expiriable):
 
     @override
     def describe(self) -> Description:
-        days_remaining = (self.valid_until() - self.start_date()).days
+        days_remaining = (
+            self.valid_until() - datetime.datetime.now(datetime.timezone.utc)
+        ).days
+
         start_date = self.start_date().strftime('%Y-%m-%d')
         tags_as_str = ', '.join(f'`{k}={v}`' for k, v in self.tags.items())
 
