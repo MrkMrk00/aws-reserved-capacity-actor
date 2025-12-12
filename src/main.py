@@ -91,6 +91,14 @@ async def main() -> None:
             input.__dict__,
         )
         long_notified_ids: set[str] = set(await store.get_value(Notification.REMINDER_LONG.store_key, []))  # noqa: E501
+        Actor.log.info(
+            f'ignoring sending notifications',
+            extra={
+                'ids': long_notified_ids,
+                'store_name': input.store_name,
+                'store_keys': await store.list_keys(),
+            },
+        )
         to_notify_long = list(get_expiring_soon(
             savings_resources, long_reminder_delta, ignore_ids=long_notified_ids))
 
@@ -110,6 +118,14 @@ async def main() -> None:
             input.__dict__,
         )
         short_notified_ids: set[str] = set(await store.get_value(Notification.REMINDER_SHORT.store_key, []))  # noqa: E501
+        Actor.log.info(
+            f'ignoring sending notifications',
+            extra={
+                'ids': long_notified_ids,
+                'store_name': input.store_name,
+                'store_keys': await store.list_keys(),
+            },
+        )
         to_notify_short = list(get_expiring_soon(
             savings_resources, short_reminder_delta, ignore_ids=short_notified_ids))
 
